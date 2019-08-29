@@ -33,7 +33,7 @@ def distance_from_point_to_point(l_point, r_point):
 # Call this
 def initialize_distance_dictionary(graph):
     distances = {}
-    for node in iter(n.graph.node.keys()):
+    for node in iter(graph.node.keys()):
         distances[node] = np.inf
     return distances
 
@@ -43,7 +43,7 @@ def all_distance_constrained_paths(
     graph, source, path_length, distance_dictionary, maximum_distance
 ):
     # For later: Avoid revisting old states
-    for target in iter(n.graph[source].keys()):
+    for target in iter(graph[source].keys()):
         edge_length = graph[source][target]["length"]
         new_path_length = path_length + edge_length
         if (
@@ -55,6 +55,7 @@ def all_distance_constrained_paths(
             all_distance_constrained_paths(
                 graph, target, new_path_length, distance_dictionary, maximum_distance
             )
+    return distance_dictionary
 
 
 # And finally this
