@@ -29,14 +29,16 @@ def distance_from_point_to_point(l_point, r_point):
     ls = LineString([(p.x, p.y) for p in [l_point, r_point]])
     return ls.length
 
-#Call this
+
+# Call this
 def initialize_distance_dictionary(graph):
     distances = {}
     for node in iter(n.graph.node.keys()):
         distances[node] = np.inf
     return distances
 
-#Then this
+
+# Then this
 def all_distance_constrained_paths(
     graph, source, path_length, distance_dictionary, maximum_distance
 ):
@@ -54,6 +56,7 @@ def all_distance_constrained_paths(
                 graph, target, new_path_length, distance_dictionary, maximum_distance
             )
 
-#And finally this
+
+# And finally this
 def get_reachable_nodes(distance_dictionary):
     return [k for k, v in filter(lambda x: x[1] < np.inf, distance_dictionary.items())]

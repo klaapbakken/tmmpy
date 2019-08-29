@@ -18,27 +18,13 @@ from networkx.drawing.nx_pylab import draw_networkx_edges
 
 
 class Network:
-    def __init__(self, nodes_df, ways_df):
+    def __init__(self, nodes_df, ways_df, crs=None):
         self.nodes_df = nodes_df
         self.ways_df = ways_df
-        self.edges_df = self.create_edges_df(ways_df, nodes_df)
+        self.edges_df = self.create_edges_df(ways_df, nodes_df, crs=crs)
         self.graph = self.create_graph()
 
-    def plot_graph(self, xmin, xmax, ymin, ymax):
-        fig, ax = plt.subplots()
-        ax.set_xlim(xmin, xmax)
-        ax.set_ylim(ymin, ymax)
-        draw_networkx_edges(
-            self.graph,
-            self.node_positions,
-            ax=ax,
-            width=0.1,
-            arrowsize=1,
-            color="blue",
-            alpha=0.2,
-        )
-
-    def create_edges_df(self, ways_df, nodes_df):
+    def create_edges_df(self, ways_df, nodes_df, crs):
         gdf_list = list()
         for _, row in ways_df.iterrows():
             osmid = row["osmid"]
@@ -61,7 +47,7 @@ class Network:
             )
             gdf_list.append(gdf)
 
-        edges_df = gpd.GeoDataFrame(pd.concat(gdf_list), geometry="line")
+        edges_df = gpd.GeoDataFrame(pd.concat(gdf_list), geometry="line", crs=crs)
         edges_df = edges_df.drop_duplicates(["node_set"])
 
         edges_df.drop("osmid", axis=1, inplace=True)

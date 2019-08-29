@@ -17,13 +17,14 @@ from shapely.geometry import Point
 
 
 class PostGISQuery:
-    def __init__(self, database, user, password):
+    def __init__(self, database, user, password, crs):
         self.con = psycopg2.connect(
             database=database, user=user, password=password, host="localhost"
         )
         print("Database connection established.")
         self.nodes_df = None
         self.ways_df = None
+        self.crs = crs
 
     def get_nodes_by_id(self, ids):
         node_ids_string = ", ".join(map(str, ids))
@@ -33,17 +34,21 @@ class PostGISQuery:
         WHERE nodes.id IN ({node_ids_string});
         """
         self.nodes_df = gpd.GeoDataFrame.from_postgis(
-            node_query, self.con, geom_col="geom"
+            node_query, self.con, geom_col="geom", crs={"init": "epsg:4326"}
         )
-        x_col = self.nodes_df.geometry.map(lambda x: x.x)
-        y_col = self.nodes_df.geometry.map(lambda x: x.y)
-        self.nodes_df["x"] = x_col
-        self.nodes_df["y"] = y_col
+        self.update_node_coordinates()
         self._parse_tags(self.nodes_df)
 
         self.nodes_df = self.nodes_df.rename(
             columns={"id": "osmid", "geom": "point"}
         ).drop(["version", "user_id", "tstamp", "changeset_id"], axis=1)
+
+        self.nodes_df.to_crs(self.crs, inplace=True)
+        self.update_node_coordinates()
+
+    def update_node_coordinates(self):
+        self.nodes_df["x"] = self.nodes_df.point.map(lambda x: x.x)
+        self.nodes_df["y"] = self.nodes_df.point.map(lambda x: x.y)
 
     def get_ways_intersecting(self, xmin, xmax, ymin, ymax):
         ways_query = f"""
@@ -54,11 +59,13 @@ class PostGISQuery:
             ST_MakeEnvelope({xmin}, {ymin}, {xmax}, {ymax});
         """
         self.ways_df = gpd.GeoDataFrame.from_postgis(
-            ways_query, self.con, geom_col="linestring"
+            ways_query, self.con, geom_col="linestring", crs={"init": "epsg:4326"}
         )
 
-        self.ways_df = self.ways_df.rename(columns={"id": "osmid"}).drop(
-            ["version", "user_id", "tstamp", "changeset_id", "bbox"], axis=1
+        self.ways_df = (
+            self.ways_df.rename(columns={"id": "osmid"})
+            .drop(["version", "user_id", "tstamp", "changeset_id", "bbox"], axis=1)
+            .to_crs(self.crs)
         )
 
         self._parse_tags(self.ways_df)
@@ -86,11 +93,12 @@ class PostGISQuery:
 
 
 class OverpassApiQuery:
-    def __init__(self):
+    def __init__(self, crs):
         self.api = overpy.Overpass()
 
         self.nodes_df = None
         self.ways_df = None
+        self.crs = crs
 
     def get_ways_intersecting(self, xmin, xmax, ymin, ymax):
         way_response = self.api.query(
@@ -104,8 +112,10 @@ class OverpassApiQuery:
         self.ways_df = self.parse_way_response(way_response)
 
         self.nodes_df = self.get_nodes_in(xmin, xmax, ymin, ymax)
-
         self.add_missing_nodes()
+
+        self.nodes_df.to_crs(self.crs, inplace=True)
+        self.update_node_coordinates()
 
         lines = []
         for _, row in self.ways_df.iterrows():
@@ -117,6 +127,8 @@ class OverpassApiQuery:
             lines.append(line)
 
         self.ways_df["linestring"] = lines
+        self.ways_df = self.ways_df.set_geometry("linestring")
+        self.ways_df.crs = {"init": self.crs}
 
     def get_nodes_in(self, xmin, xmax, ymin, ymax):
         node_response = self.api.query(
@@ -141,6 +153,10 @@ class OverpassApiQuery:
         )
 
         return self.parse_node_response(nodes_response)
+
+    def update_node_coordinates(self):
+        self.nodes_df["x"] = self.nodes_df.point.map(lambda x: x.x)
+        self.nodes_df["y"] = self.nodes_df.point.map(lambda x: x.y)
 
     def parse_node_response(self, response):
         osmids = []
@@ -169,6 +185,7 @@ class OverpassApiQuery:
                 "point": pd.Series(geoms),
             },
             geometry="point",
+            crs={"init": "epsg:4326"},
         )
 
     def parse_way_response(self, response):
@@ -196,4 +213,8 @@ class OverpassApiQuery:
 
         missing_nodes_df = self.get_nodes_by_id(missing_nodes)
 
-        self.nodes_df = pd.concat([self.nodes_df, missing_nodes_df])
+        self.nodes_df = gpd.GeoDataFrame(
+            pd.concat([self.nodes_df, missing_nodes_df]),
+            geometry="point",
+            crs={"init": "epsg:4326"},
+        )
