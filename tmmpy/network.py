@@ -28,7 +28,15 @@ class Network:
         fig, ax = plt.subplots()
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
-        draw_networkx_edges(self.graph, self.node_positions, ax=ax, width=0.1, arrowsize=1, color="blue", alpha=0.2)
+        draw_networkx_edges(
+            self.graph,
+            self.node_positions,
+            ax=ax,
+            width=0.1,
+            arrowsize=1,
+            color="blue",
+            alpha=0.2,
+        )
 
     def create_edges_df(self, ways_df, nodes_df):
         gdf_list = list()
@@ -48,8 +56,8 @@ class Network:
                 },
                 geometry="line",
             )
-            gdf = gdf.assign(
-                node_set=lambda x: pd.Series(map(tuple, sorted(zip(x.u, x.v))))
+            gdf["node_set"] = pd.Series(
+                [tuple(sorted([u, v])) for u, v in zip(gdf.u, gdf.v)]
             )
             gdf_list.append(gdf)
 
@@ -57,7 +65,7 @@ class Network:
         edges_df = edges_df.drop_duplicates(["node_set"])
 
         edges_df.drop("osmid", axis=1, inplace=True)
-        return (
+        edges_df = (
             edges_df.merge(
                 nodes_df[["x", "y", "point", "osmid"]], left_on="u", right_on="osmid"
             )
@@ -69,6 +77,10 @@ class Network:
             .drop("osmid", axis=1)
             .rename(columns={"x": "vx", "y": "vy", "point": "v_point"})
         )
+
+        edges_df["length"] = edges_df.line.map(lambda x: x.length)
+
+        return edges_df
 
     def _filter_gdf_by_tag(self, gdf, required_keys, required_values):
         # Fix this. Need pairs to match. Will probably work though.
@@ -87,9 +99,14 @@ class Network:
         return self._filter_gdf_by_tag(self.ways_df, required_keys, required_values)
 
     def create_graph(self):
-        graph = nx.DiGraph()
+        graph = nx.Graph()
         graph.add_nodes_from(self.nodes_df.osmid)
-        graph.add_edges_from(self.edges_df.node_set)
+        graph.add_edges_from(
+            [
+                (edge[0], edge[1], {"length": length})
+                for edge, length in zip(self.edges_df.node_set, self.edges_df.length)
+            ]
+        )
         return graph
 
     @property
