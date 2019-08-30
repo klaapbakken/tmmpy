@@ -89,8 +89,10 @@ class Network:
         graph.add_nodes_from(self.nodes_df.osmid)
         graph.add_edges_from(
             [
-                (edge[0], edge[1], {"length": length, "line" : line})
-                for edge, length, line in zip(self.edges_df.node_set, self.edges_df.length, self.edges_df.line)
+                (edge[0], edge[1], {"length": length, "line": line})
+                for edge, length, line in zip(
+                    self.edges_df.node_set, self.edges_df.length, self.edges_df.line
+                )
             ]
         )
         return graph

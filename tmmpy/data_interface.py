@@ -36,15 +36,17 @@ class PostGISQuery:
         self.nodes_df = gpd.GeoDataFrame.from_postgis(
             node_query, self.con, geom_col="geom", crs={"init": "epsg:4326"}
         )
-        
+
         self.nodes_df["x"] = self.nodes_df.geom.map(lambda x: x.x)
         self.nodes_df["y"] = self.nodes_df.geom.map(lambda x: x.y)
 
         self._parse_tags(self.nodes_df)
 
-        self.nodes_df = self.nodes_df.rename(
-            columns={"id": "osmid", "geom": "point"}
-        ).drop(["version", "user_id", "tstamp", "changeset_id"], axis=1).set_geometry("point")
+        self.nodes_df = (
+            self.nodes_df.rename(columns={"id": "osmid", "geom": "point"})
+            .drop(["version", "user_id", "tstamp", "changeset_id"], axis=1)
+            .set_geometry("point")
+        )
 
         self.nodes_df.to_crs(self.crs, inplace=True)
         self.update_node_coordinates()
