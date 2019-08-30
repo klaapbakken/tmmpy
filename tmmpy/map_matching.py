@@ -1,6 +1,8 @@
 import networkx as nx
 import numpy as np
 
+from math import exp
+
 from itertools import product
 from shapely.geometry import LineString
 from shapely.ops import nearest_points
@@ -98,3 +100,19 @@ def get_reachable_edges(edges_df, distance_dictionary):
         lambda x: min(x["u_distance"], x["v_distance"]), axis=1
     )
     return reachable_edges_df
+
+def compute_transition_probabilties(gamma):
+    reachable_edges_dictionary = {
+    k : v for k, v in zip(
+    iter(n.graph.edges),
+    map(lambda x: get_reachable_edges(n.edges_df, find_all_distance_constrained_paths(n.graph, x, 100)), iter(n.graph.edges))
+    )
+    }
+    def transition_probability(x, y):
+        if not in_edges_df(y, reachable_edges_dictionary[x]):
+            return 0
+        else:
+            df = reachable_edges_dictionary[x]
+            distance = df[df.node_set.map(lambda x: x == tuple(sorted(y)))]["distance"].iloc[0]
+            return exp(-gamma*distance)
+    return transition_probability
