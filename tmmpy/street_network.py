@@ -5,7 +5,7 @@ import numpy as np
 import networkx as nx
 
 from shapely import geometry
-from osmapi import OsmApi
+from shapely.ops import nearest_points
 from itertools import product
 from itertools import chain
 
@@ -17,11 +17,11 @@ from shapely.geometry import Point
 from networkx.drawing.nx_pylab import draw_networkx_edges
 
 
-class Network:
-    def __init__(self, nodes_df, ways_df, crs=None):
-        self.nodes_df = nodes_df
-        self.ways_df = ways_df
-        self.edges_df = self.create_edges_df(ways_df, nodes_df, crs=crs)
+class StreetNetwork:
+    def __init__(self, data_source, crs):
+        self.nodes_df = data_source.nodes_df
+        self.ways_df = data_source.ways_df
+        self.edges_df = self.create_edges_df(self.ways_df, self.nodes_df, crs=crs)
         self.graph = self.create_graph()
 
     def create_edges_df(self, ways_df, nodes_df, crs):
@@ -96,6 +96,25 @@ class Network:
             ]
         )
         return graph
+
+    def shortest_path_length_between_nodes(self, l_node, r_node):
+        return nx.shortest_path_length(
+            self.graph, source=l_node, target=r_node, weight="length"
+        )
+
+    def shortest_path_length_between_edges(self, l_edge, r_edge):
+        return min(
+            (
+                self.shortest_path_length_between_nodes(nodes[0], nodes[1])
+                for nodes in product(l_edge, r_edge)
+            )
+        )
+
+    def distance_from_point_to_edge(self, point, edge):
+        edge_line = self.edges_df[self.edges_df.node_set == tuple(sorted(edge))].line.iloc[0]
+        closest_points = nearest_points(point, edge_line)
+        ls = LineString([(p.x, p.y) for p in closest_points])
+        return ls.length
 
     @property
     def node_positions(self):
