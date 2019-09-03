@@ -14,17 +14,20 @@ import matplotlib.pyplot as plt
 from shapely.geometry import LineString
 from shapely.geometry import Point
 
-from networkx.drawing.nx_pylab import draw_networkx_edges
-
 
 class StreetNetwork:
-    def __init__(self, data_source, crs):
-        self.nodes_df = data_source.nodes_df
-        self.ways_df = data_source.ways_df
-        self.edges_df = self.create_edges_df(self.ways_df, self.nodes_df, crs=crs)
+    """Class for representing various data derived from the data source.  
+    Intended to support using the data to easily work with street networks as state spaces.
+    """
+    def __init__(self, data):
+        assert data.nodes_df.crs == data.ways_df.crs
+        self.nodes_df = data.nodes_df
+        self.ways_df = data.ways_df
+        self.edges_df = self.create_edges_df(self.ways_df, self.nodes_df, crs=data.nodes_df.crs)
         self.graph = self.create_graph()
 
     def create_edges_df(self, ways_df, nodes_df, crs):
+        """Creates a dataframe consisting of the individual segments that make out the ways in the data source."""
         gdf_list = list()
         for _, row in ways_df.iterrows():
             osmid = row["osmid"]
@@ -69,6 +72,8 @@ class StreetNetwork:
         return edges_df
 
     def create_graph(self):
+        """Creates a graph, with each node being a node from the data source and each edge being an individual segment
+        from the segment that makes out the ways."""
         graph = nx.Graph()
         graph.add_nodes_from(self.nodes_df.osmid)
         graph.add_edges_from(
@@ -81,12 +86,14 @@ class StreetNetwork:
         )
         return graph
 
-    def shortest_path_length_between_nodes(self, l_node, r_node):
+    def shortest_path_length_between_nodes(self, l_node: int, r_node: int):
+        """Find the length of the shortest path between two nodes."""
         return nx.shortest_path_length(
             self.graph, source=l_node, target=r_node, weight="length"
         )
 
     def shortest_path_length_between_edges(self, l_edge, r_edge):
+        """Find the length of the shortest path connecting two edges."""
         return min(
             (
                 self.shortest_path_length_between_nodes(nodes[0], nodes[1])
@@ -94,7 +101,8 @@ class StreetNetwork:
             )
         )
 
-    def distance_from_point_to_edge(self, point, edge):
+    def distance_from_point_to_edge(self, point: Point, edge: tuple):
+        """Find the distance from a point to the nearest point on the edge."""
         edge_line = self.edges_df[self.edges_df.node_set == tuple(sorted(edge))].line.iloc[0]
         closest_points = nearest_points(point, edge_line)
         ls = LineString([(p.x, p.y) for p in closest_points])
