@@ -1,10 +1,6 @@
 import os
 import json
 
-secret_location = os.path.abspath(os.path.join("..", "secret.json"))
-with open(secret_location) as f:
-    secret_password = json.load(f)["password"]
-
 from data_interface import PostGISQuery
 from street_network import StreetNetwork
 from state_space import StreetStateSpace
@@ -25,30 +21,29 @@ class GPSMapMatcher:
         ymin,
         ymax,
         gamma,
-        sigma,
-        max_distance,
+        sigma
     ):
         self.crs = crs
         self.xmin, self.xmax, self.ymin, self.ymax = xmin, xmax, ymin, ymax
         self.bounding_box = self.xmin, self.xmax, self.ymin, self.ymax
         self._sigma = sigma
         self.state_space = self.create_assosciated_state_space(
-            database, user, secret_password, gamma, max_distance
+            database, user, password, gamma
         )
         self.transition_probability = self.state_space.transition_probability
         self.hmm = HiddenMarkovModel(
             self.transition_probability,
             self.emission_probability,
             self.initial_probability,
-            self.state_space.street_network.edges_df.node_set.values.tolist(),
+            list(self.state_space.street_network.graph.edges.keys())
         )
 
     def create_assosciated_state_space(
-        self, database, user, password, gamma, max_distance
+        self, database, user, password, gamma
     ):
         data = PostGISQuery(database, user, password, self.crs, self.bounding_box)
         street_network = StreetNetwork(data)
-        return StreetStateSpace(street_network, gamma, max_distance)
+        return StreetStateSpace(street_network, gamma)
 
     def emission_probability(self, x, y):
         distance = self.state_space.street_network.distance_from_point_to_edge(x, y)

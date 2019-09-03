@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 from shapely.geometry import LineString
 from shapely.geometry import Point
 
+from networkx.algorithms.components.connected import connected_component_subgraphs
+
 
 class StreetNetwork:
     """Class for representing various data derived from the data source.  
@@ -28,6 +30,7 @@ class StreetNetwork:
             self.ways_df, self.nodes_df, crs=data.nodes_df.crs
         )
         self.graph = self.create_graph()
+        self.graph = max(connected_component_subgraphs(self.graph), key=len)
 
     def create_edges_df(self, ways_df, nodes_df, crs):
         """Creates a dataframe consisting of the individual segments that make out the ways in the data source."""
