@@ -19,11 +19,14 @@ class StreetNetwork:
     """Class for representing various data derived from the data source.  
     Intended to support using the data to easily work with street networks as state spaces.
     """
+
     def __init__(self, data):
         assert data.nodes_df.crs == data.ways_df.crs
         self.nodes_df = data.nodes_df
         self.ways_df = data.ways_df
-        self.edges_df = self.create_edges_df(self.ways_df, self.nodes_df, crs=data.nodes_df.crs)
+        self.edges_df = self.create_edges_df(
+            self.ways_df, self.nodes_df, crs=data.nodes_df.crs
+        )
         self.graph = self.create_graph()
 
     def create_edges_df(self, ways_df, nodes_df, crs):
@@ -103,7 +106,9 @@ class StreetNetwork:
 
     def distance_from_point_to_edge(self, point: Point, edge: tuple):
         """Find the distance from a point to the nearest point on the edge."""
-        edge_line = self.edges_df[self.edges_df.node_set == tuple(sorted(edge))].line.iloc[0]
+        edge_line = self.edges_df[
+            self.edges_df.node_set == tuple(sorted(edge))
+        ].line.iloc[0]
         closest_points = nearest_points(point, edge_line)
         ls = LineString([(p.x, p.y) for p in closest_points])
         return ls.length

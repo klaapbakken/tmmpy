@@ -32,7 +32,18 @@ class PostGISQuery:
     ways_table -- Name of the table where ways are stored \n
     filter_dictionary -- Dictionary that specifies which keys and values are allowed in tags. Ways that do not match any of the key-value pairs are removed
     """
-    def __init__(self, database: str, user: str, password: str, crs: str, bounding_box: tuple, nodes_table: str ="nodes", ways_table: str ="ways", filter_dictionary: dict={}):
+
+    def __init__(
+        self,
+        database: str,
+        user: str,
+        password: str,
+        crs: str,
+        bounding_box: tuple,
+        nodes_table: str = "nodes",
+        ways_table: str = "ways",
+        filter_dictionary: dict = {},
+    ):
         """See class documentation."""
         self.con = psycopg2.connect(
             database=database, user=user, password=password, host="localhost"
@@ -124,7 +135,9 @@ class PostGISQuery:
 
     def filter_ways_by_tags(self):
         """Remove ways that do not contain one of the key-value pairs in the filter dictionary."""
-        keep = self.ways_df.tags.map(lambda x: self.filter_tags(self.filter_dictionary, x))
+        keep = self.ways_df.tags.map(
+            lambda x: self.filter_tags(self.filter_dictionary, x)
+        )
         self.ways_df = self.ways_df[keep]
 
     def filter_tags(self, filter_dictionary: dict, tags: dict):
@@ -155,7 +168,15 @@ class OverpassApiQuery:
     bounding_box -- Tuple of coordinates (xmin, xmax, ymin, ymax)
     filter_dictionary -- Dictionary that specifies which keys and values are allowed in tags. Ways that do not match any of the key-value pairs are removed
     """
-    def __init__(self, crs: str, bounding_box: tuple, nodes_table: str ="nodes", ways_table: str ="ways", filter_dictionary: dict={}):
+
+    def __init__(
+        self,
+        crs: str,
+        bounding_box: tuple,
+        nodes_table: str = "nodes",
+        ways_table: str = "ways",
+        filter_dictionary: dict = {},
+    ):
         """See class documentation."""
         self.api = overpy.Overpass()
         self.nodes_df = None
@@ -295,7 +316,9 @@ class OverpassApiQuery:
 
     def filter_ways_by_tags(self):
         """Remove ways that do not contain one of the key-value pairs in the filter dictionary."""
-        keep = self.ways_df.tags.map(lambda x: self.filter_tags(self.filter_dictionary, x))
+        keep = self.ways_df.tags.map(
+            lambda x: self.filter_tags(self.filter_dictionary, x)
+        )
         self.ways_df = self.ways_df[keep]
 
     def filter_tags(self, filter_dictionary: dict, tags: dict):

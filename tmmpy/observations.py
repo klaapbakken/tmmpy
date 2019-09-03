@@ -7,7 +7,8 @@ import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point
 
-class GPSObservations():
+
+class GPSObservations:
     """A class for representing GPS-measurements. 
     
     Parameters:
@@ -18,16 +19,27 @@ class GPSObservations():
     time_col -- Name of column containing time of measurement \n
     crs -- The desired output coordinate reference system
     """
-    def __init__(self, observations_df: gpd.GeoDataFrame, longitude_col: str, latitude_col: str, time_col: str, crs: str):
+
+    def __init__(
+        self,
+        observations_df: gpd.GeoDataFrame,
+        longitude_col: str,
+        latitude_col: str,
+        time_col: str,
+        crs: str,
+    ):
         """See class documentation."""
         self.crs = crs
         self._lonlat_df = observations_df.rename(
-            columns={longitude_col : "x",
-                 latitude_col : "y",
-                 time_col : "time"})
+            columns={longitude_col: "x", latitude_col: "y", time_col: "time"}
+        )
         self._lonlat_df["time"] = pd.to_datetime(self._lonlat_df.time)
-        self._lonlat_df["point"] = self._lonlat_df.apply(lambda x: Point(x["x"], x["y"]), axis=1)
-        self._lonlat_df = gpd.GeoDataFrame(self._lonlat_df, geometry="point", crs={"init" : "epsg:4326"})
+        self._lonlat_df["point"] = self._lonlat_df.apply(
+            lambda x: Point(x["x"], x["y"]), axis=1
+        )
+        self._lonlat_df = gpd.GeoDataFrame(
+            self._lonlat_df, geometry="point", crs={"init": "epsg:4326"}
+        )
         self._lonlat_df.sort_values(by="time", ascending=True)
 
         self.df = self._lonlat_df.to_crs(crs)
@@ -37,7 +49,13 @@ class GPSObservations():
     @property
     def maximum_subsequent_distance(self):
         """Find the maximum distance between subsequent GPS observations."""
-        return np.max(np.linalg.norm(self.df[["x", "y"]].iloc[:-1].values - self.df[["x", "y"]].iloc[1:].values, axis=1))
+        return np.max(
+            np.linalg.norm(
+                self.df[["x", "y"]].iloc[:-1].values
+                - self.df[["x", "y"]].iloc[1:].values,
+                axis=1,
+            )
+        )
 
     @property
     def lonlat_bounding_box(self):
@@ -46,15 +64,10 @@ class GPSObservations():
             self._lonlat_df.x.min(),
             self._lonlat_df.x.max(),
             self._lonlat_df.y.min(),
-            self._lonlat_df.y.max()
+            self._lonlat_df.y.max(),
         )
 
     @property
     def bounding_box(self):
         """Get the bounding box of the dataframe in current CRS (specified during construction)."""
-        return (
-            self.df.x.min(),
-            self.df.x.max(),
-            self.df.y.min(),
-            self.df.y.max()
-        )
+        return (self.df.x.min(), self.df.x.max(), self.df.y.min(), self.df.y.max())
