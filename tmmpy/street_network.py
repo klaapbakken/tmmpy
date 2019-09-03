@@ -68,22 +68,6 @@ class StreetNetwork:
 
         return edges_df
 
-    def _filter_gdf_by_tag(self, gdf, required_keys, required_values):
-        # Fix this. Need pairs to match. Will probably work though.
-        has_keys = gdf.tags.map(
-            lambda x: all(map(lambda key: key in x.keys(), required_keys))
-        )
-        has_values = gdf.tags.map(
-            lambda x: all(map(lambda val: val in x.values(), required_values))
-        )
-        return gdf[has_keys & has_values]
-
-    def filter_nodes_by_tag(self, required_keys=[], required_values=[]):
-        return self._filter_gdf_by_tag(self.nodes_df, required_keys, required_values)
-
-    def filter_ways_by_tag(self, required_keys=[], required_values=[]):
-        return self._filter_gdf_by_tag(self.ways_df, required_keys, required_values)
-
     def create_graph(self):
         graph = nx.Graph()
         graph.add_nodes_from(self.nodes_df.osmid)

@@ -11,6 +11,43 @@ from hmm import HiddenMarkovModel
 
 from math import exp, sqrt, pi
 
+ALLOWED_HIGHWAY_VALUES = [
+    "motorway",
+    "trunk",
+    "primary",
+    "secondary",
+    "tertiary",
+    "unclassified",
+    "residential",
+    "motorway_link",
+    "trunk_link",
+    "primary_link",
+    "secondary_link",
+    "tertiary_link",
+    "service",
+    "living_street",
+    "road",
+    "cycleway",
+    "footway",
+    "path"
+]
+
+ALLOWED_CYCLEWAY_VALUES = [
+    "lane",
+    "opposite",
+    "opposite_lane",
+    "track",
+    "opposite_track",
+    "share_busway",
+    "opposite_share_busway",
+    "shared_lane"
+]
+
+FILTER_DICTIONARY = {
+    "highway" : ALLOWED_HIGHWAY_VALUES,
+    "cycleway" : ALLOWED_CYCLEWAY_VALUES
+}
+
 
 class GPSMapMatcher():
     def __init__(self, xmin, xmax, ymin, ymax, crs, gamma, sigma, max_distance):
@@ -28,7 +65,7 @@ class GPSMapMatcher():
             )
 
     def create_assosciated_state_space(self, database, user, password, gamma, max_distance):
-        data_source = PostGISQuery(database, user, password, self.crs)
+        data_source = PostGISQuery(database, user, password, self.crs, filter_dictionary=FILTER_DICTIONARY)
         data_source.get_ways_intersecting(self.xmin, self.xmax, self.ymin, self.ymax)
         street_network = StreetNetwork(data_source, self.crs)
         return StreetStateSpace(street_network, gamma, max_distance)
