@@ -19,9 +19,7 @@ class StreetStateSpace:
 
     """
 
-    def __init__(
-        self, street_network: StreetNetwork, gamma: float
-    ):
+    def __init__(self, street_network: StreetNetwork, gamma: float):
         """See class documentation."""
         self.street_network = street_network
         self.shortest_path_dictionary = self.compute_shortest_path_dictionary()
@@ -33,7 +31,7 @@ class StreetStateSpace:
             self.street_network.graph, weight="length"
         )
         shortest_path_dictionary = {
-            source : distance_dictionary
+            source: distance_dictionary
             for source, distance_dictionary in shortest_path_generator
         }
         return shortest_path_dictionary
