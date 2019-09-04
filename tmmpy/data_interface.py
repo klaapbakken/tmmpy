@@ -158,7 +158,7 @@ class PostGISQuery:
         return np.array(list(chain(*self.ways_df.nodes.values)))
 
 
-class OverpassApiQuery:
+class OverpassAPIQuery:
     """
     A class that enables easily obtaining data from the Overpass API.
 
@@ -197,27 +197,27 @@ class OverpassApiQuery:
         )
 
         self.ways_df = self.parse_way_response(way_response)
-
         self.filter_ways_by_tags()
 
         self.nodes_df = self.get_nodes_in()
         self.add_missing_nodes()
+        lines = []
+        for _, row in self.ways_df.iterrows():
+            df = pd.DataFrame()
+            nodes = row["nodes"]
+            df["node"] = nodes
+            df = df.merge(self.nodes_df, left_on="node", right_on="osmid")
+            line = LineString([(row["x"], row["y"]) for _, row in df.iterrows()])
+            lines.append(line)
 
         self.nodes_df.to_crs(self.crs, inplace=True)
         self.update_node_coordinates()
 
-        lines = []
-        for _, row in self.ways_df.iterrows():
-            gdf = gpd.GeoDataFrame()
-            nodes = row["nodes"]
-            gdf["node"] = nodes
-            gdf = gdf.merge(self.nodes_df, left_on="node", right_on="osmid")
-            line = LineString([(row["x"], row["y"]) for _, row in gdf.iterrows()])
-            lines.append(line)
-
-        self.ways_df["linestring"] = lines
-        self.ways_df = self.ways_df.set_geometry("linestring")
-        self.ways_df.crs = {"init": self.crs}
+        self.ways_df["linestring"] = pd.Series(lines)
+        self.ways_df = gpd.GeoDataFrame(
+            self.ways_df, geometry="linestring", crs={"init": "epsg:4326"}
+        )
+        self.ways_df.to_crs(self.crs, inplace=True)
 
     def get_nodes_in(self):
         """Get nodes in bounding box."""
@@ -294,9 +294,7 @@ class OverpassApiQuery:
             tags = way.tags
             tag_dicts.append(tags)
 
-        return gpd.GeoDataFrame(
-            {"osmid": osmids, "nodes": node_lists, "tags": tag_dicts}
-        )
+        return pd.DataFrame({"osmid": osmids, "nodes": node_lists, "tags": tag_dicts})
 
     def add_missing_nodes(self):
         """If a node in a way is not obtained by getting nodes within bounding box, get it by querying by ID."""

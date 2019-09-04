@@ -29,8 +29,12 @@ class StreetNetwork:
         self.edges_df = self.create_edges_df(
             self.ways_df, self.nodes_df, crs=data.nodes_df.crs
         )
+
         self.graph = self.create_graph()
+
         self.graph = max(connected_component_subgraphs(self.graph), key=len)
+        self.trim_edges_df()
+        self.trim_nodes_df()
 
     def create_edges_df(self, ways_df, nodes_df, crs):
         """Creates a dataframe consisting of the individual segments that make out the ways in the data source."""
@@ -91,6 +95,16 @@ class StreetNetwork:
             ]
         )
         return graph
+
+    def trim_edges_df(self):
+        """Remove rows in edges_df that are not part of the largest connected component."""
+        edges_in_graph = set(map(lambda x: tuple(sorted(x)), self.graph.edges.keys()))
+        self.edges_df = self.edges_df[self.edges_df.node_set.isin(edges_in_graph)]
+    
+    def trim_nodes_df(self):
+        """Remove nodes in nodes_df that are not part of the largest connected component."""
+        nodes_in_graph = set(self.graph.nodes.keys())
+        self.nodes_df = self.nodes_df[self.nodes_df.osmid.isin(nodes_in_graph)]
 
     def shortest_path_length_between_nodes(self, l_node: int, r_node: int):
         """Find the length of the shortest path between two nodes."""
