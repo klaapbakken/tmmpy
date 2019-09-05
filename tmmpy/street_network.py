@@ -100,7 +100,7 @@ class StreetNetwork:
         """Remove rows in edges_df that are not part of the largest connected component."""
         edges_in_graph = set(map(lambda x: tuple(sorted(x)), self.graph.edges.keys()))
         self.edges_df = self.edges_df[self.edges_df.node_set.isin(edges_in_graph)]
-    
+
     def trim_nodes_df(self):
         """Remove nodes in nodes_df that are not part of the largest connected component."""
         nodes_in_graph = set(self.graph.nodes.keys())
