@@ -3,12 +3,10 @@ import overpy
 
 import pandas as pd
 import geopandas as gpd
-import osmnx as ox
 import numpy as np
 import networkx as nx
 
 from shapely import geometry
-from osmapi import OsmApi
 from itertools import product
 from itertools import chain
 

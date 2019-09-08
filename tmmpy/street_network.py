@@ -1,6 +1,5 @@
 import pandas as pd
 import geopandas as gpd
-import osmnx as ox
 import numpy as np
 import networkx as nx
 
