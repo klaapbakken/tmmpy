@@ -425,6 +425,8 @@ class NVDBAPIQuery():
             nodes.append(row_ids)
         
         ways_df = self.raw_df[["linestring", "osmid"]].copy()
+        ways_df.crs = fiona.crs.from_epsg(32633)
+        ways_df.set_geometry("linestring", inplace=True)
         ways_df["nodes"] = pd.Series(nodes)
         ways_df["osmid"] = pd.Series(list(range(ways_df.shape[0])), dtype=np.int64)
         
@@ -439,6 +441,6 @@ class NVDBAPIQuery():
         
         nodes_df["x"] = nodes_df.point.map(lambda x: x.x)
         nodes_df["y"] = nodes_df.point.map(lambda x: x.y)
-        
-        self.nodes_df = nodes_df.drop_duplicates("osmid")
+
         self.ways_df = ways_df
+        self.nodes_df = nodes_df.drop_duplicates("osmid")

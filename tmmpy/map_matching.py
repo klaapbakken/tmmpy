@@ -3,7 +3,7 @@ import json
 
 import pandas as pd
 
-from data_interface import PostGISQuery, OverpassAPIQuery
+from data_interface import PostGISQuery, OverpassAPIQuery, NVDBAPIQuery
 from street_network import StreetNetwork
 from state_space import StreetStateSpace
 from hmm import HiddenMarkovModel
@@ -38,17 +38,20 @@ class GPSMapMatcher:
     """
 
     def __init__(
-        self, crs: str, gamma: float, sigma: float, method="overpass", **kwargs
+        self, epsg: str, gamma: float, sigma: float, method="overpass", **kwargs
     ):
         assert (
             all(map(lambda x: x in kwargs, ["xmin", "ymin", "xmax", "ymax"]))
             or "observations" in kwargs
         )
-        self.crs = crs
+        self.epsg = epsg
         self._sigma = sigma
-        if "observations" in kwargs:
+        if "observations" in kwargs and method in {"overpass", "postgis"}:
             self.attach_observations(kwargs["observations"])
             self.bounding_box = self.observations.lonlat_bounding_box
+        elif "observations" in kwargs and method  == "nvdb":
+            self.attach_observations(kwargs["observations"])
+            self.bounding_box = self.observations.utm33_bounding_box
         if all(map(lambda x: x in kwargs, ["xmin", "ymin", "xmax", "ymax"])):
             self.most_likely_edge_sequence = None
             self.bounding_box = (
@@ -63,9 +66,11 @@ class GPSMapMatcher:
             )
         elif method == "overpass":
             self.state_space = self.create_assosciated_state_space_using_overpass(gamma)
+        elif method == "nvdb":
+            self.state_space = self.create_assosciated_state_space_using_nvdb(gamma)
         else:
             raise ValueError(
-                'Named argument "method" must be either "overpass" or "postgis"'
+                'Named argument "method" must be either "overpass", "postgis" or "nvdb"'
             )
         self.transition_probability = self.state_space.transition_probability
         self.hmm = HiddenMarkovModel(
@@ -79,13 +84,19 @@ class GPSMapMatcher:
         self, database, user, password, gamma
     ):
         """Creating a state space using the arguments supplied in constructor."""
-        data = PostGISQuery(database, user, password, self.crs, self.bounding_box)
+        data = PostGISQuery(database, user, password, self.epsg, self.bounding_box)
         street_network = StreetNetwork(data)
         return StreetStateSpace(street_network, gamma)
 
     def create_assosciated_state_space_using_overpass(self, gamma):
         """Creating a state space using the arguments supplied in constructor."""
-        data = OverpassAPIQuery(self.crs, self.bounding_box)
+        data = OverpassAPIQuery(self.epsg, self.bounding_box)
+        street_network = StreetNetwork(data)
+        return StreetStateSpace(street_network, gamma)
+    
+    def create_assosciated_state_space_using_nvdb(self, gamma):
+        print(self.bounding_box, self.epsg)
+        data = NVDBAPIQuery(self.bounding_box, self.epsg)
         street_network = StreetNetwork(data)
         return StreetStateSpace(street_network, gamma)
 
