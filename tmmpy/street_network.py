@@ -60,7 +60,7 @@ class StreetNetwork:
             gdf_list.append(gdf)
 
         edges_df = gpd.GeoDataFrame(pd.concat(gdf_list), geometry="line", crs=crs)
-        edges_df = edges_df.drop_duplicates(["node_set"])
+        edges_df = edges_df.drop_duplicates("node_set")
 
         edges_df.drop("osmid", axis=1, inplace=True)
         edges_df = (

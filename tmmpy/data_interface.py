@@ -12,6 +12,10 @@ from itertools import chain
 
 from shapely.geometry import LineString
 from shapely.geometry import Point
+from shapely.wkt import loads
+
+import fiona
+import requests
 
 
 class PostGISQuery:
@@ -24,7 +28,7 @@ class PostGISQuery:
     database -- Name of the database \n
     user -- Name of user with access to database \n
     password -- Password for user \n
-    crs -- Coordinate reference system the data should be converted to \n
+    epsg -- Coordinate reference system the data should be converted to \n
     bounding_box -- Tuple of coordinates (xmin, xmax, ymin, ymax) \n
     nodes_table -- Name of the table where nodes are stored \n
     ways_table -- Name of the table where ways are stored \n
@@ -36,19 +40,21 @@ class PostGISQuery:
         database: str,
         user: str,
         password: str,
-        crs: str,
+        epsg: str,
         bounding_box: tuple,
         nodes_table: str = "nodes",
         ways_table: str = "ways",
         filter_dictionary: dict = {},
     ):
         """See class documentation."""
+        self.LONLAT_CRS = fiona.crs.from_epsg(4326)
         self.con = psycopg2.connect(
             database=database, user=user, password=password, host="localhost"
         )
         self.nodes_df = None
         self.ways_df = None
-        self.crs = crs
+        self.epsg = epsg
+        self.crs = fiona.crs.from_epsg(self.epsg)
         self.filter_dictionary = filter_dictionary
         self.nodes_table = nodes_table
         self.ways_table = ways_table
@@ -64,7 +70,7 @@ class PostGISQuery:
         WHERE {self.nodes_table}.id IN ({node_ids_string});
         """
         self.nodes_df = gpd.GeoDataFrame.from_postgis(
-            node_query, self.con, geom_col="geom", crs={"init": "epsg:4326"}
+            node_query, self.con, geom_col="geom", crs=self.LONLAT_CRS
         )
 
         self.nodes_df["x"] = self.nodes_df.geom.map(lambda x: x.x)
@@ -78,7 +84,7 @@ class PostGISQuery:
             .set_geometry("point")
         )
 
-        self.nodes_df.to_crs(self.crs, inplace=True)
+        self.nodes_df.to_crs(epsg=self.epsg, inplace=True)
         self.update_node_coordinates()
 
     def update_node_coordinates(self):
@@ -99,13 +105,13 @@ class PostGISQuery:
             );
         """
         self.ways_df = gpd.GeoDataFrame.from_postgis(
-            ways_query, self.con, geom_col="linestring", crs={"init": "epsg:4326"}
+            ways_query, self.con, geom_col="linestring", crs=self.LONLAT_CRS
         )
 
         self.ways_df = (
             self.ways_df.rename(columns={"id": "osmid"})
             .drop(["version", "user_id", "tstamp", "changeset_id", "bbox"], axis=1)
-            .to_crs(self.crs)
+            .to_crs(epsg=self.epsg)
         )
 
         self._parse_tags(self.ways_df)
@@ -162,24 +168,26 @@ class OverpassAPIQuery:
 
     Parameters:
     ---
-    crs -- Coordinate reference system the data should be converted to
+    epsg -- Coordinate reference system the data should be converted to
     bounding_box -- Tuple of coordinates (xmin, xmax, ymin, ymax)
     filter_dictionary -- Dictionary that specifies which keys and values are allowed in tags. Ways that do not match any of the key-value pairs are removed
     """
 
     def __init__(
         self,
-        crs: str,
+        epsg: int,
         bounding_box: tuple,
         nodes_table: str = "nodes",
         ways_table: str = "ways",
         filter_dictionary: dict = {},
     ):
         """See class documentation."""
+        self.LONLAT_CRS = fiona.crs.from_epsg(4326)
         self.api = overpy.Overpass()
         self.nodes_df = None
         self.ways_df = None
-        self.crs = crs
+        self.epsg = epsg
+        self.crs = fiona.crs.from_epsg(self.epsg)
         self.filter_dictionary = filter_dictionary
         self.xmin, self.xmax, self.ymin, self.ymax = bounding_box
         self.query_bounding_box()
@@ -208,14 +216,14 @@ class OverpassAPIQuery:
             line = LineString([(row["x"], row["y"]) for _, row in df.iterrows()])
             lines.append(line)
 
-        self.nodes_df.to_crs(self.crs, inplace=True)
+        self.nodes_df.to_crs(epsg=self.epsg, inplace=True)
         self.update_node_coordinates()
 
         self.ways_df["linestring"] = pd.Series(lines)
         self.ways_df = gpd.GeoDataFrame(
-            self.ways_df, geometry="linestring", crs={"init": "epsg:4326"}
+            self.ways_df, geometry="linestring", crs=self.LONLAT_CRS
         )
-        self.ways_df.to_crs(self.crs, inplace=True)
+        self.ways_df.to_crs(epsg=self.epsg, inplace=True)
 
     def get_nodes_in(self):
         """Get nodes in bounding box."""
@@ -276,7 +284,7 @@ class OverpassAPIQuery:
                 "point": pd.Series(geoms),
             },
             geometry="point",
-            crs={"init": "epsg:4326"},
+            crs=self.LONLAT_CRS,
         )
 
     def parse_way_response(self, response):
@@ -307,7 +315,7 @@ class OverpassAPIQuery:
         self.nodes_df = gpd.GeoDataFrame(
             pd.concat([self.nodes_df, missing_nodes_df]),
             geometry="point",
-            crs={"init": "epsg:4326"},
+            crs=self.LONLAT_CRS,
         )
 
     def filter_ways_by_tags(self):
@@ -328,3 +336,109 @@ class OverpassAPIQuery:
                 has_value = False
             bool_set.add(has_key and has_value)
         return any(bool_set) or len(bool_set) == 0
+
+class NVDBAPIQuery():
+    def __init__(self, utm33_bounding_box, epsg):
+        self.endpoint = "https://www.vegvesen.no/nvdb/api/v2/vegnett/lenker"
+        self.headers = {
+            "X-Client" : "tmmpy",
+            "X-Kontaktperson" : "oyvind.klaapbakken@gmail.com",
+            "Accept" : "application/vnd.vegvesen.nvdb-v2+json"
+            }
+        self.xmin, self.xmax, self.ymin, self.ymax = utm33_bounding_box
+        self.epsg = epsg
+        self.responses = []
+        self.initial_query()
+        self.parse_responses()
+        self.create_dfs()
+
+    def initial_query(self):
+        params = {
+            "kartutsnitt" : f"{self.xmin},{self.ymin},{self.xmax},{self.ymax}",
+            "srid" : 32633
+        }
+        self.initial_params = params
+        response = requests.get(self.endpoint, params=params, headers=self.headers)
+        self.responses.append(response.json())
+        self.continue_query()
+
+    def continue_query(self):
+        previous_response = self.responses[-1]
+        new_params = self.initial_params
+        new_params["start"] = previous_response["metadata"]["neste"]["start"]
+        response = requests.get(
+            self.endpoint,
+            params=new_params,
+            headers=self.headers
+            )
+        self.responses.append(response.json())
+        if self.responses[-1]["metadata"]["returnert"] > 0:
+                self.continue_query()
+    
+    def parse_responses(self):
+        geoms = []
+        ids = []
+        us = []
+        vs = []
+        for response in self.responses:
+            for objekt in response["objekter"]:
+                geoms.append(objekt["geometri"])
+                us.append(objekt["startnode"])
+                vs.append(objekt["sluttnode"])
+                ids.append(objekt["veglenkeid"])
+        self.raw_df = gpd.GeoDataFrame(
+            {
+                "linestring" : pd.Series(list(map(lambda x: LineString([xy[:2] for xy in x.coords]), map(lambda x: loads(x["wkt"]), geoms)))),
+                "osmid" : pd.Series(ids, dtype=np.int64),
+                "u" : pd.Series(us, dtype=np.int64),
+                "v" : pd.Series(vs, dtype=np.int64)
+            },
+            geometry="linestring",
+            crs=fiona.crs.from_epsg(32633)
+        )
+    
+    def create_dfs(self):
+        def id_generator(ids_in_use):
+            i = 0
+            while True:
+                if i not in ids_in_use:
+                    yield i
+                i += 1
+
+        points = []
+        ids = []
+        ids_in_use = set(self.raw_df.u.values.tolist()).union(set(self.raw_df.v.values.tolist()))
+        id_gen = id_generator(ids_in_use)
+        nodes = []
+        for _, row in self.raw_df.iterrows():
+            linestring_coords = list(row["linestring"].coords)
+            row_ids = []
+            for i, xy in enumerate(linestring_coords):
+                points.append(Point(xy))
+                if i == 0:
+                    ids.append(row["u"])
+                elif i == len(linestring_coords) - 1:
+                    ids.append(row["v"])
+                else:
+                    ids.append(next(id_gen))
+                row_ids.append(ids[-1])
+            nodes.append(row_ids)
+        
+        ways_df = self.raw_df[["linestring", "osmid"]].copy()
+        ways_df["nodes"] = pd.Series(nodes)
+        ways_df["osmid"] = pd.Series(list(range(ways_df.shape[0])), dtype=np.int64)
+        
+        nodes_df = gpd.GeoDataFrame(
+            {
+                "point" :  pd.Series(points),
+                "osmid" : pd.Series(ids, dtype=np.int64)
+            },
+            geometry="point",
+            crs=fiona.crs.from_epsg(32633)
+        )
+        
+        nodes_df["x"] = nodes_df.point.map(lambda x: x.x)
+        nodes_df["y"] = nodes_df.point.map(lambda x: x.y)
+        
+        self.nodes_df = nodes_df.drop_duplicates("osmid")
+        self.ways_df = ways_df

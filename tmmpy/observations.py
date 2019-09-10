@@ -7,6 +7,7 @@ import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point
 
+import fiona
 
 class GPSObservations:
     """A class for representing GPS-measurements. 
@@ -26,10 +27,11 @@ class GPSObservations:
         longitude_col: str,
         latitude_col: str,
         time_col: str,
-        crs: str,
+        epsg: int,
     ):
         """See class documentation."""
-        self.crs = crs
+        self.LONLAT_CRS = fiona.crs.from_epsg(4326)
+        self.epsg = epsg
         self._lonlat_df = observations_df.rename(
             columns={longitude_col: "x", latitude_col: "y", time_col: "time"}
         )
@@ -38,11 +40,15 @@ class GPSObservations:
             lambda x: Point(x["x"], x["y"]), axis=1
         )
         self._lonlat_df = gpd.GeoDataFrame(
-            self._lonlat_df, geometry="point", crs={"init": "epsg:4326"}
+            self._lonlat_df, geometry="point", crs=self.LONLAT_CRS
         )
         self._lonlat_df.sort_values(by="time", ascending=True)
 
-        self.df = self._lonlat_df.to_crs(crs)
+        self._utm33_df = self._lonlat_df.to_crs(epsg=32633)
+        self._utm33_df["x"] = self._utm33_df.point.map(lambda x: x.x)
+        self._utm33_df["y"] = self._utm33_df.point.map(lambda x: x.y)
+
+        self.df = self._lonlat_df.to_crs(epsg=self.epsg)
         self.df["x"] = self.df.point.map(lambda x: x.x)
         self.df["y"] = self.df.point.map(lambda x: x.y)
 
@@ -65,6 +71,15 @@ class GPSObservations:
             self._lonlat_df.x.max(),
             self._lonlat_df.y.min(),
             self._lonlat_df.y.max(),
+        )
+
+    @property
+    def utm33_bounding_box(self):
+                return (
+            self._utm33_df.x.min(),
+            self._utm33_df.x.max(),
+            self._utm33_df.y.min(),
+            self._utm33_df.y.max(),
         )
 
     @property
