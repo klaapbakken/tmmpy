@@ -22,6 +22,7 @@ class StreetStateSpace:
     def __init__(self, street_network: StreetNetwork, gamma: float):
         """See class documentation."""
         self.street_network = street_network
+        self.states = street_network.edges_df.node_set.values.tolist()
         self.shortest_path_dictionary = self.compute_shortest_path_dictionary()
         self._gamma = gamma
 
@@ -47,4 +48,7 @@ class StreetStateSpace:
 
     @gamma.setter
     def gamma(self, value):
-        self._gamma = value
+        if value <= 0:
+            raise ValueError("Gamma must be positive.")
+        else:
+            self._gamma = value

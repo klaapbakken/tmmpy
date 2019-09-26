@@ -156,6 +156,13 @@ class PostGISQuery:
             bool_set.add(has_key and has_value)
         return any(bool_set) or len(bool_set) == 0
 
+    def transform(self, epsg):
+        self.ways_df.to_crs(crs=fiona.crs.from_epsg(epsg), inplace=True)
+        self.nodes_df.to_crs(crs=fiona.crs.from_epsg(epsg), inplace=True)
+        self.nodes_df["x"] = self.nodes_df.point.map(lambda x: x.x)
+        self.nodes_df["y"] = self.nodes_df.point.map(lambda x: x.y)
+        return self
+
     @property
     def node_ids(self):
         """Get the ID of the all the nodes in the ways dataframe."""
@@ -337,6 +344,13 @@ class OverpassAPIQuery:
             bool_set.add(has_key and has_value)
         return any(bool_set) or len(bool_set) == 0
 
+    def transform(self, epsg):
+        self.ways_df.to_crs(crs=fiona.crs.from_epsg(epsg), inplace=True)
+        self.nodes_df.to_crs(crs=fiona.crs.from_epsg(epsg), inplace=True)
+        self.nodes_df["x"] = self.nodes_df.point.map(lambda x: x.x)
+        self.nodes_df["y"] = self.nodes_df.point.map(lambda x: x.y)
+        return self
+
 class NVDBAPIQuery():
     def __init__(self, utm33_bounding_box, epsg):
         self.endpoint = "https://www.vegvesen.no/nvdb/api/v2/vegnett/lenker"
@@ -351,6 +365,7 @@ class NVDBAPIQuery():
         self.initial_query()
         self.parse_responses()
         self.create_dfs()
+        self.transform(epsg=self.epsg)
 
     def initial_query(self):
         params = {
@@ -364,6 +379,9 @@ class NVDBAPIQuery():
 
     def continue_query(self):
         previous_response = self.responses[-1]
+        if type(previous_response) != dict:
+            print(previous_response)
+            raise ValueError
         new_params = self.initial_params
         new_params["start"] = previous_response["metadata"]["neste"]["start"]
         response = requests.get(
@@ -425,10 +443,10 @@ class NVDBAPIQuery():
             nodes.append(row_ids)
         
         ways_df = self.raw_df[["linestring", "osmid"]].copy()
-        ways_df.crs = fiona.crs.from_epsg(32633)
-        ways_df.set_geometry("linestring", inplace=True)
         ways_df["nodes"] = pd.Series(nodes)
         ways_df["osmid"] = pd.Series(list(range(ways_df.shape[0])), dtype=np.int64)
+        ways_df.crs = fiona.crs.from_epsg(32633)
+        ways_df.set_geometry("linestring", inplace=True)
         
         nodes_df = gpd.GeoDataFrame(
             {
@@ -444,3 +462,10 @@ class NVDBAPIQuery():
 
         self.ways_df = ways_df
         self.nodes_df = nodes_df.drop_duplicates("osmid")
+
+    def transform(self, epsg):
+        self.ways_df.to_crs(crs=fiona.crs.from_epsg(epsg), inplace=True)
+        self.nodes_df.to_crs(crs=fiona.crs.from_epsg(epsg), inplace=True)
+        self.nodes_df["x"] = self.nodes_df.point.map(lambda x: x.x)
+        self.nodes_df["y"] = self.nodes_df.point.map(lambda x: x.y)
+        return self

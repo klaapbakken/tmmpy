@@ -119,7 +119,7 @@ class GPSMapMatcher:
     def calculate_most_likely_edge_sequence(self):
         """Run Viterbi to infer most likely path."""
         assert self.observations is not None
-        self.most_likely_edge_sequence = self.hmm.most_likely_path(
+        self.most_likely_edge_sequence = self.hmm.decode(
             self.observations.df.point.values
         )
 

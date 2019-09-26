@@ -14,7 +14,7 @@ class GPSObservations:
     
     Parameters:
     ---
-    observations_df -- Dataframe containing at least x- and y-coordinates \n
+    observations_df -- Dataframe containing at x- and y-coordinates and time \n
     longitude_col -- Name of column containing longitude \n
     latitude_col -- Name of column containing latitude \n
     time_col -- Name of column containing time of measurement \n
@@ -23,66 +23,51 @@ class GPSObservations:
 
     def __init__(
         self,
-        observations_df: gpd.GeoDataFrame,
-        longitude_col: str,
-        latitude_col: str,
+        df: pd.DataFrame,
+        x_col: str,
+        y_col: str,
         time_col: str,
-        epsg: int,
+        input_epsg: int,
+        output_epsg: int,
     ):
         """See class documentation."""
-        self.LONLAT_CRS = fiona.crs.from_epsg(4326)
-        self.epsg = epsg
-        self._lonlat_df = observations_df.rename(
-            columns={longitude_col: "x", latitude_col: "y", time_col: "time"}
+        INPUT_CRS = fiona.crs.from_epsg(input_epsg)
+        OUTPUT_CRS = fiona.crs.from_epsg(output_epsg)
+        
+        self.input_df = df.rename(columns={x_col: "x", y_col: "y", time_col: "time"})
+        
+        self.input_df = (
+            self.input_df
+            .assign(point=self.input_df.apply(lambda x: Point(x["x"], x["y"]), axis=1))
+            .assign(time=pd.to_datetime(self.input_df.time))
+            .sort_values(by="time", ascending=True)
+            .set_index("time")
         )
-        self._lonlat_df["time"] = pd.to_datetime(self._lonlat_df.time)
-        self._lonlat_df["point"] = self._lonlat_df.apply(
-            lambda x: Point(x["x"], x["y"]), axis=1
-        )
-        self._lonlat_df = gpd.GeoDataFrame(
-            self._lonlat_df, geometry="point", crs=self.LONLAT_CRS
-        )
-        self._lonlat_df.sort_values(by="time", ascending=True)
+        self.input_df = gpd.GeoDataFrame(self.input_df, geometry="point", crs=INPUT_CRS)
+        self.output_df = self.input_df.to_crs(crs=OUTPUT_CRS)
+        self.update_coordinate_columns()
 
-        self._utm33_df = self._lonlat_df.to_crs(epsg=32633)
-        self._utm33_df["x"] = self._utm33_df.point.map(lambda x: x.x)
-        self._utm33_df["y"] = self._utm33_df.point.map(lambda x: x.y)
+    def update_coordinate_columns(self):
+        self.output_df["x"] = self.output_df.point.map(lambda x: x.x)
+        self.output_df["y"] = self.output_df.point.map(lambda x: x.y)
 
-        self.df = self._lonlat_df.to_crs(epsg=self.epsg)
-        self.df["x"] = self.df.point.map(lambda x: x.x)
-        self.df["y"] = self.df.point.map(lambda x: x.y)
+    def transform(self, epsg):
+        self.output_df.to_crs(crs=fiona.crs.from_epsg(epsg), inplace=True)
+        self.update_coordinate_columns()
+        return self
 
     @property
     def maximum_subsequent_distance(self):
         """Find the maximum distance between subsequent GPS observations."""
         return np.max(
             np.linalg.norm(
-                self.df[["x", "y"]].iloc[:-1].values
-                - self.df[["x", "y"]].iloc[1:].values,
+                self.output_df[["x", "y"]].iloc[:-1].values
+                - self.output_df[["x", "y"]].iloc[1:].values,
                 axis=1,
             )
         )
 
     @property
-    def lonlat_bounding_box(self):
-        """Get the bounding box in original, longitude-latitude CRS."""
-        return (
-            self._lonlat_df.x.min(),
-            self._lonlat_df.x.max(),
-            self._lonlat_df.y.min(),
-            self._lonlat_df.y.max(),
-        )
-
-    @property
-    def utm33_bounding_box(self):
-                return (
-            self._utm33_df.x.min(),
-            self._utm33_df.x.max(),
-            self._utm33_df.y.min(),
-            self._utm33_df.y.max(),
-        )
-
-    @property
     def bounding_box(self):
-        """Get the bounding box of the dataframe in current CRS (specified during construction)."""
-        return (self.df.x.min(), self.df.x.max(), self.df.y.min(), self.df.y.max())
+        """Get the bounding box of the dataframe in current CRS."""
+        return (self.output_df.x.min(), self.output_df.x.max(), self.output_df.y.min(), self.output_df.y.max())
