@@ -351,14 +351,15 @@ class OverpassAPIQuery:
         self.nodes_df["y"] = self.nodes_df.point.map(lambda x: x.y)
         return self
 
-class NVDBAPIQuery():
+
+class NVDBAPIQuery:
     def __init__(self, utm33_bounding_box, epsg):
         self.endpoint = "https://www.vegvesen.no/nvdb/api/v2/vegnett/lenker"
         self.headers = {
-            "X-Client" : "tmmpy",
-            "X-Kontaktperson" : "oyvind.klaapbakken@gmail.com",
-            "Accept" : "application/vnd.vegvesen.nvdb-v2+json"
-            }
+            "X-Client": "tmmpy",
+            "X-Kontaktperson": "oyvind.klaapbakken@gmail.com",
+            "Accept": "application/vnd.vegvesen.nvdb-v2+json",
+        }
         self.xmin, self.xmax, self.ymin, self.ymax = utm33_bounding_box
         self.epsg = epsg
         self.responses = []
@@ -369,8 +370,8 @@ class NVDBAPIQuery():
 
     def initial_query(self):
         params = {
-            "kartutsnitt" : f"{self.xmin},{self.ymin},{self.xmax},{self.ymax}",
-            "srid" : 32633
+            "kartutsnitt": f"{self.xmin},{self.ymin},{self.xmax},{self.ymax}",
+            "srid": 32633,
         }
         self.initial_params = params
         response = requests.get(self.endpoint, params=params, headers=self.headers)
@@ -384,15 +385,11 @@ class NVDBAPIQuery():
             raise ValueError
         new_params = self.initial_params
         new_params["start"] = previous_response["metadata"]["neste"]["start"]
-        response = requests.get(
-            self.endpoint,
-            params=new_params,
-            headers=self.headers
-            )
+        response = requests.get(self.endpoint, params=new_params, headers=self.headers)
         self.responses.append(response.json())
         if self.responses[-1]["metadata"]["returnert"] > 0:
-                self.continue_query()
-    
+            self.continue_query()
+
     def parse_responses(self):
         geoms = []
         ids = []
@@ -406,15 +403,22 @@ class NVDBAPIQuery():
                 ids.append(objekt["veglenkeid"])
         self.raw_df = gpd.GeoDataFrame(
             {
-                "linestring" : pd.Series(list(map(lambda x: LineString([xy[:2] for xy in x.coords]), map(lambda x: loads(x["wkt"]), geoms)))),
-                "osmid" : pd.Series(ids, dtype=np.int64),
-                "u" : pd.Series(us, dtype=np.int64),
-                "v" : pd.Series(vs, dtype=np.int64)
+                "linestring": pd.Series(
+                    list(
+                        map(
+                            lambda x: LineString([xy[:2] for xy in x.coords]),
+                            map(lambda x: loads(x["wkt"]), geoms),
+                        )
+                    )
+                ),
+                "osmid": pd.Series(ids, dtype=np.int64),
+                "u": pd.Series(us, dtype=np.int64),
+                "v": pd.Series(vs, dtype=np.int64),
             },
             geometry="linestring",
-            crs=fiona.crs.from_epsg(32633)
+            crs=fiona.crs.from_epsg(32633),
         )
-    
+
     def create_dfs(self):
         def id_generator(ids_in_use):
             i = 0
@@ -425,7 +429,9 @@ class NVDBAPIQuery():
 
         points = []
         ids = []
-        ids_in_use = set(self.raw_df.u.values.tolist()).union(set(self.raw_df.v.values.tolist()))
+        ids_in_use = set(self.raw_df.u.values.tolist()).union(
+            set(self.raw_df.v.values.tolist())
+        )
         id_gen = id_generator(ids_in_use)
         nodes = []
         for _, row in self.raw_df.iterrows():
@@ -441,22 +447,19 @@ class NVDBAPIQuery():
                     ids.append(next(id_gen))
                 row_ids.append(ids[-1])
             nodes.append(row_ids)
-        
+
         ways_df = self.raw_df[["linestring", "osmid"]].copy()
         ways_df["nodes"] = pd.Series(nodes)
         ways_df["osmid"] = pd.Series(list(range(ways_df.shape[0])), dtype=np.int64)
         ways_df.crs = fiona.crs.from_epsg(32633)
         ways_df.set_geometry("linestring", inplace=True)
-        
+
         nodes_df = gpd.GeoDataFrame(
-            {
-                "point" :  pd.Series(points),
-                "osmid" : pd.Series(ids, dtype=np.int64)
-            },
+            {"point": pd.Series(points), "osmid": pd.Series(ids, dtype=np.int64)},
             geometry="point",
-            crs=fiona.crs.from_epsg(32633)
+            crs=fiona.crs.from_epsg(32633),
         )
-        
+
         nodes_df["x"] = nodes_df.point.map(lambda x: x.x)
         nodes_df["y"] = nodes_df.point.map(lambda x: x.y)
 

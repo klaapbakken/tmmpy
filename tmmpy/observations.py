@@ -9,6 +9,7 @@ from shapely.geometry import Point
 
 import fiona
 
+
 class GPSObservations:
     """A class for representing GPS-measurements. 
     
@@ -33,12 +34,13 @@ class GPSObservations:
         """See class documentation."""
         INPUT_CRS = fiona.crs.from_epsg(input_epsg)
         OUTPUT_CRS = fiona.crs.from_epsg(output_epsg)
-        
+
         self.input_df = df.rename(columns={x_col: "x", y_col: "y", time_col: "time"})
-        
+
         self.input_df = (
-            self.input_df
-            .assign(point=self.input_df.apply(lambda x: Point(x["x"], x["y"]), axis=1))
+            self.input_df.assign(
+                point=self.input_df.apply(lambda x: Point(x["x"], x["y"]), axis=1)
+            )
             .assign(time=pd.to_datetime(self.input_df.time))
             .sort_values(by="time", ascending=True)
             .set_index("time")
@@ -70,4 +72,9 @@ class GPSObservations:
     @property
     def bounding_box(self):
         """Get the bounding box of the dataframe in current CRS."""
-        return (self.output_df.x.min(), self.output_df.x.max(), self.output_df.y.min(), self.output_df.y.max())
+        return (
+            self.output_df.x.min(),
+            self.output_df.x.max(),
+            self.output_df.y.min(),
+            self.output_df.y.max(),
+        )
