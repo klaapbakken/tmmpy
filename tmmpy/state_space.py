@@ -26,6 +26,9 @@ class StreetStateSpace:
         self.shortest_path_dictionary = self.compute_shortest_path_dictionary()
         self._gamma = gamma
 
+    def __len__(self):
+        return len(self.states)
+
     def compute_shortest_path_dictionary(self):
         """Computing all shortest paths. """
         shortest_path_generator = all_pairs_dijkstra_path_length(
