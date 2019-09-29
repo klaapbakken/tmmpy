@@ -52,7 +52,6 @@ print("Attaching observations:")
 for gps_observation in tqdm(observation_objects):
     gps_map_matcher.attach_observations(gps_observation)
     gps_map_matcher.add_observations()
-    break
 
 baum_welch_start_time = time.time()
 
