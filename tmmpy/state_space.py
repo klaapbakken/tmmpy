@@ -40,10 +40,13 @@ class StreetStateSpace:
         }
         return shortest_path_dictionary
 
-    def transition_probability(self, x, y):
+    def exponential_decay_transition_probability(self, x, y):
         """Transition probability """
         distance = min((self.shortest_path_dictionary[a][b] for a, b in product(x, y)))
         return exp(-self.gamma * distance)
+    
+    def uniform_transition_probability(self, x, y):
+        return 1/len(self)
 
     @property
     def gamma(self):

@@ -8,20 +8,23 @@ from types import MethodType
 
 
 class GPSMapMatcher:
-    def __init__(self, state_space, mode, **kwargs):
+    def __init__(self, state_space, transition_mode, emission_mode, **kwargs):
         self.kwargs = kwargs
-        SUPPORTED_MODES = frozenset(["projection", "gaussian"])
-        assert mode in SUPPORTED_MODES
-        self.mode = mode
+        SUPPORTED_EMISSION_MODES = frozenset(["projection", "gaussian"])
+        SUPPORTED_TRANSITION_MODES = frozenset(["exponential", "uniform"])
+        assert emission_mode in SUPPORTED_EMISSION_MODES
+        assert transition_mode in SUPPORTED_TRANSITION_MODES
+        self.transition_mode = transition_mode
+        self.emission_mode = emission_mode
         if "sigma" in kwargs:
             self._sigma = kwargs["sigma"]
         else:
             self._sigma = 1
         self.state_space = state_space
         self._gamma = self.state_space.gamma
-        self.transition_probability = state_space.transition_probability
-        self.create_emission_probability(mode)
-        self.create_hidden_markov_model(mode)
+        self.assign_transition_probability(transition_mode)
+        self.create_emission_probability(emission_mode)
+        self.create_hidden_markov_model(emission_mode)
         self.zs = []
 
     @property
@@ -40,13 +43,19 @@ class GPSMapMatcher:
     @gamma.setter
     def gamma(self, value):
         self._gamma = self.state_space.gamma = value
-        self.create_hidden_markov_model(self.mode)
+        self.create_hidden_markov_model(self.emission_mode)
 
     def initial_probability(self, x):
         return 1 / len(self.state_space)
 
-    def create_emission_probability(self, mode):
-        if mode == "projection":
+    def assign_transition_probability(self, transition_mode):
+        if transition_mode == "exponential":
+            self.transition_probability = self.state_space.exponential_decay_transition_probability
+        elif transition_mode == "uniform":
+            self.transition_probability = self.state_space.uniform_transition_probability
+
+    def create_emission_probability(self, emission_mode):
+        if emission_mode == "projection":
             assert "sigma" in self.kwargs
 
             def emission_probability(x, y):
@@ -58,7 +67,7 @@ class GPSMapMatcher:
                 )
 
             setattr(self, "emission_probability", emission_probability)
-        elif mode == "gaussian":
+        elif emission_mode == "gaussian":
             midpoints = (
                 self.state_space.street_network.edges_df.apply(
                     lambda x: x["line"].interpolate(0.5), axis=1
@@ -71,8 +80,8 @@ class GPSMapMatcher:
                 self.sigma * np.eye(2), [self.mean.shape[0], 1]
             ).reshape(self.mean.shape[0], self.mean.shape[1], self.mean.shape[1])
 
-    def create_hidden_markov_model(self, mode):
-        if mode == "projection":
+    def create_hidden_markov_model(self, emission_mode):
+        if emission_mode == "projection":
             assert hasattr(self, "emission_probability")
             self.hidden_markov_model = HiddenMarkovModel(
                 self.transition_probability,
@@ -80,7 +89,7 @@ class GPSMapMatcher:
                 self.initial_probability,
                 self.state_space.states,
             )
-        elif mode == "gaussian":
+        elif emission_mode == "gaussian":
             assert hasattr(self, "mean") and hasattr(self, "covariance")
             self.hidden_markov_model = GaussianHiddenMarkovModel(
                 self.transition_probability,

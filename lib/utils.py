@@ -47,15 +47,8 @@ def tracks_intersecting_densest_region(gdf, region_width=1000):
     
     return gdf[gdf.track_id.isin(track_ids)], polygon
 
-def load_observation_gdf():
-    data_path = os.path.abspath(
-        os.path.join(
-            "..",
-            "data",
-            "BlueTOI",
-            "BlueTOI"
-        )
-    )
+def load_observation_gdf(data_path):
+
     data = list(map(pd.read_csv, map(lambda x: os.path.join(data_path, x), os.listdir(data_path))))
 
     df = pd.DataFrame(
@@ -65,7 +58,7 @@ def load_observation_gdf():
         }
     )
 
-    gdf = gpd.GeoDataFrame(df, crs=fiona.crs.from_epsg(4326)).set_geometry("point").to_crs(epsg=32633)
+    gdf = gpd.GeoDataFrame(df, crs=fiona.crs.from_epsg(4326)).set_geometry("point").to_crs(epsg=32632)
     gdf["x"] = gdf.point.map(lambda x: x.x)
     gdf["y"] = gdf.point.map(lambda x: x.y)
 
