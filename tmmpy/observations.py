@@ -78,3 +78,28 @@ class GPSObservations:
             self.output_df.y.min(),
             self.output_df.y.max(),
         )
+
+class TimelessGPSObservations(GPSObservations):
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        x_col: str,
+        y_col: str,
+        input_crs: dict,
+        output_crs: dict,
+    ):
+        """See class documentation."""
+        INPUT_CRS = input_crs
+        OUTPUT_CRS = output_crs
+
+        self.input_df = df.rename(columns={x_col: "x", y_col: "y"})
+
+        self.input_df = (
+            self.input_df.assign(
+                point=self.input_df.apply(lambda x: Point(x["x"], x["y"]), axis=1)
+            )
+            .sort_index()
+        )
+        self.input_df = gpd.GeoDataFrame(self.input_df, geometry="point", crs=INPUT_CRS)
+        self.output_df = self.input_df.to_crs(crs=OUTPUT_CRS)
+        self.update_coordinate_columns()

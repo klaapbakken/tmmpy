@@ -17,7 +17,7 @@ def validate_track(gdf, length_requirement=50, quantiles=[0.1, 0.9], slack=100):
         return (lower + slack) < median < (upper - slack)
     return all(map(within_bounds, ["x", "y"])) and long_enough
 
-def tracks_intersecting_densest_region(gdf, region_width=1000):
+def tracks_intersecting_densest_region(gdf, region_width=200):
     x_range = [gdf.x.min(), gdf.x.max()]
     y_range = [gdf.y.min(), gdf.y.max()]
     x_span = np.max(np.diff(x_range))
