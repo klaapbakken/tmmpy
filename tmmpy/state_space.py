@@ -7,7 +7,7 @@ from itertools import product
 from networkx.algorithms.shortest_paths.weighted import all_pairs_dijkstra_path_length
 
 
-class StreetStateSpace:
+class SegmentStateSpace:
     """
     State space based on street network.
 

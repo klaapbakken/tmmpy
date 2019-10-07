@@ -108,7 +108,7 @@ class GPSMapMatcher:
     def attach_observations(self, observations, **kwargs):
         self.observations = observations
         if type(self.hidden_markov_model) is HiddenMarkovModel:
-            self.z = observations.output_df.point.values.tolist()
+            self.z = observations.output_df.point.tolist()
         elif type(self.hidden_markov_model) is GaussianHiddenMarkovModel:
             self.z = list(observations.output_df[["x", "y"]].to_numpy().tolist())
         else:
