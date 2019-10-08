@@ -76,15 +76,7 @@ class GPSMapMatcher:
                 .values.tolist()
             )
             self.mean = np.array(midpoints)
-            self.covariance = (
-                np.concatenate(
-                    (self.state_space.street_network.edges_df.length.map(
-                    lambda x: x*self.sigma**2*np.eye(2)
-                    )
-                    .values)
-                )
-                    .reshape(self.mean.shape[0], self.mean.shape[1], self.mean.shape[1])
-            )
+            self.covariance = np.tile(self.state_space.street_network.edges_df.length.mean()*np.eye(self.mean.shape[1]), [self.mean.shape[0], 1, 1])
 
     def create_hidden_markov_model(self, emission_mode):
         if emission_mode == "projection":
