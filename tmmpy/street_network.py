@@ -29,6 +29,7 @@ class StreetNetwork:
         self.edges_df = self.create_edges_df(
             self.ways_df, self.nodes_df, crs=data.nodes_df.crs
         )
+        self.linestring_lookup = self.create_linestring_lookup()
 
         self.graph = self.create_graph()
 
@@ -85,6 +86,9 @@ class StreetNetwork:
     def trim_graph(self):
         return max(connected_component_subgraphs(self.graph), key=len)
 
+    def create_linestring_lookup(self):
+        return {tuple(sorted(edge)) : line for edge, line in zip(self.edges_df.node_set, self.edges_df.line)}
+
     def create_graph(self):
         """Creates a graph, with each node being a node from the data source and each edge being an individual segment
         from the segment that makes out the ways."""
@@ -127,10 +131,8 @@ class StreetNetwork:
 
     def distance_from_point_to_edge(self, point: Point, edge: tuple):
         """Find the distance from a point to the nearest point on the edge."""
-        edge_line = self.edges_df[
-            self.edges_df.node_set == tuple(sorted(edge))
-        ].line.iloc[0]
-        closest_points = nearest_points(point, edge_line)
+        line = self.linestring_lookup[tuple(sorted(edge))]
+        closest_points = nearest_points(point, line)
         ls = LineString([(p.x, p.y) for p in closest_points])
         return ls.length
 

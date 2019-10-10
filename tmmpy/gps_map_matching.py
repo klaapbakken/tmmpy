@@ -66,7 +66,7 @@ class GPSMapMatcher:
                     -distance ** 2 / (2 * self.sigma ** 2)
                 )
 
-            setattr(self, "emission_probability", emission_probability)
+            self.emission_probability = emission_probability
         elif emission_mode == "gaussian":
             midpoints = (
                 self.state_space.street_network.edges_df.apply(
