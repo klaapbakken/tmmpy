@@ -17,6 +17,7 @@ from networkx import connected_component_subgraphs, weakly_connected_component_s
 
 import fiona
 
+
 class StreetNetwork:
     """Class for representing various data derived from the data source.  
     Intended to support using the data to easily work with street networks as state spaces.
@@ -87,7 +88,10 @@ class StreetNetwork:
         return max(connected_component_subgraphs(self.graph), key=len)
 
     def create_linestring_lookup(self):
-        return {tuple(sorted(edge)) : line for edge, line in zip(self.edges_df.node_set, self.edges_df.line)}
+        return {
+            tuple(sorted(edge)): line
+            for edge, line in zip(self.edges_df.node_set, self.edges_df.line)
+        }
 
     def create_graph(self):
         """Creates a graph, with each node being a node from the data source and each edge being an individual segment
@@ -136,45 +140,57 @@ class StreetNetwork:
         ls = LineString([(p.x, p.y) for p in closest_points])
         return ls.length
 
+
 class DirectedStreetNetwork(StreetNetwork):
     @staticmethod
     def create_edges_df(ways_df, nodes_df, crs):
         intermediate_dfs = []
         for _, row in ways_df.iterrows():
             point_coords = list(row["linestring"].coords)
-            segment = [LineString([i, j]) for i, j in zip(point_coords[:-1], point_coords[1:])]
+            segment = [
+                LineString([i, j]) for i, j in zip(point_coords[:-1], point_coords[1:])
+            ]
             nodes = row["nodes"]
             if ("oneway", "yes") in row["tags"].items():
-                edges = [(from_node, to_node) for from_node, to_node in zip(nodes[:-1], nodes[1:])]
+                edges = [
+                    (from_node, to_node)
+                    for from_node, to_node in zip(nodes[:-1], nodes[1:])
+                ]
             else:
-                edges = [(from_node, to_node) for from_node, to_node in zip(nodes[:-1], nodes[1:])]
+                edges = [
+                    (from_node, to_node)
+                    for from_node, to_node in zip(nodes[:-1], nodes[1:])
+                ]
                 edges += list(map(lambda x: tuple(reversed(x)), edges))
                 segment += segment
             u = list(map(lambda x: x[0], edges))
             v = list(map(lambda x: x[1], edges))
-            df = pd.DataFrame({"u" : u, "v" : v, "node_set" : edges, "linestring" : segment})
+            df = pd.DataFrame(
+                {"u": u, "v": v, "node_set": edges, "linestring": segment}
+            )
             intermediate_dfs.append(df)
-        gdf = gpd.GeoDataFrame(pd.concat(intermediate_dfs), geometry="linestring", crs=crs)
+        gdf = gpd.GeoDataFrame(
+            pd.concat(intermediate_dfs), geometry="linestring", crs=crs
+        )
         gdf["length"] = gdf.linestring.map(lambda x: x.length)
         return gdf
 
-        
     def create_graph(self):
         graph = nx.DiGraph()
-        graph.add_nodes_from(pd.Series(self.edges_df.u.tolist() + self.edges_df.v.tolist()).unique())
+        graph.add_nodes_from(
+            pd.Series(self.edges_df.u.tolist() + self.edges_df.v.tolist()).unique()
+        )
         graph.add_edges_from(
             [
                 (edge[0], edge[1], {"length": length})
-                for edge, length in zip(
-                    self.edges_df.node_set, self.edges_df.length
-                )
+                for edge, length in zip(self.edges_df.node_set, self.edges_df.length)
             ]
         )
         return graph
-    
+
     def trim_graph(self):
         return max(weakly_connected_component_subgraphs(self.graph), key=len)
-    
+
     def trim_edges_df(self):
         """Remove rows in edges_df that are not part of the largest connected component."""
         edges_in_graph = list(self.graph.edges.keys())

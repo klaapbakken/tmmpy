@@ -50,9 +50,13 @@ class GPSMapMatcher:
 
     def assign_transition_probability(self, transition_mode):
         if transition_mode == "exponential":
-            self.transition_probability = self.state_space.exponential_decay_transition_probability
+            self.transition_probability = (
+                self.state_space.exponential_decay_transition_probability
+            )
         elif transition_mode == "uniform":
-            self.transition_probability = self.state_space.uniform_transition_probability
+            self.transition_probability = (
+                self.state_space.uniform_transition_probability
+            )
 
     def create_emission_probability(self, emission_mode):
         if emission_mode == "projection":
@@ -76,7 +80,11 @@ class GPSMapMatcher:
                 .values.tolist()
             )
             self.mean = np.array(midpoints)
-            self.covariance = np.tile(self.state_space.street_network.edges_df.length.mean()*np.eye(self.mean.shape[1]), [self.mean.shape[0], 1, 1])
+            self.covariance = np.tile(
+                self.state_space.street_network.edges_df.length.mean()
+                * np.eye(self.mean.shape[1]),
+                [self.mean.shape[0], 1, 1],
+            )
 
     def create_hidden_markov_model(self, emission_mode):
         if emission_mode == "projection":
