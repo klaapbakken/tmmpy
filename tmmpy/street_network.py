@@ -17,32 +17,53 @@ from networkx import connected_component_subgraphs, weakly_connected_component_s
 
 import fiona
 
+from abc import ABC, abstractmethod
 
-class StreetNetwork:
+
+class StreetNetwork(ABC):
+    def __init__(self, data):
+        assert data.nodes_df.crs == data.ways_df.crs
+        self.crs = data.nodes_df.crs
+        self.nodes_df = data.nodes_df
+        self.ways_df = data.ways_df
+
+        self.create_edges_df()
+        self.create_linestring_lookup()
+        self.create_graph()
+
+        self.trim_graph()
+        self.trim_edges_df()
+
+    @abstractmethod
+    def create_edges_df(self):
+        pass
+
+    @abstractmethod
+    def create_linestring_lookup(self):
+        pass
+
+    @abstractmethod
+    def create_graph(self):
+        pass
+
+    @abstractmethod
+    def trim_graph(self):
+        pass
+
+    @abstractmethod
+    def trim_edges_df(self):
+        pass
+
+
+class UndirectedStreetNetwork(StreetNetwork):
     """Class for representing various data derived from the data source.  
     Intended to support using the data to easily work with street networks as state spaces.
     """
 
-    def __init__(self, data):
-        assert data.nodes_df.crs == data.ways_df.crs
-        self.nodes_df = data.nodes_df
-        self.ways_df = data.ways_df
-        self.edges_df = self.create_edges_df(
-            self.ways_df, self.nodes_df, crs=data.nodes_df.crs
-        )
-        self.linestring_lookup = self.create_linestring_lookup()
-
-        self.graph = self.create_graph()
-
-        self.graph = self.trim_graph()
-        self.trim_edges_df()
-        self.trim_nodes_df()
-
-    @staticmethod
-    def create_edges_df(ways_df, nodes_df, crs):
+    def create_edges_df(self):
         """Creates a dataframe consisting of the individual segments that make out the ways in the data source."""
         gdf_list = list()
-        for _, row in ways_df.iterrows():
+        for _, row in self.ways_df.iterrows():
             osmid = row["osmid"]
             us = row["nodes"][:-1]
             vs = row["nodes"][1:]
@@ -63,18 +84,22 @@ class StreetNetwork:
             )
             gdf_list.append(gdf)
 
-        edges_df = gpd.GeoDataFrame(pd.concat(gdf_list), geometry="line", crs=crs)
+        edges_df = gpd.GeoDataFrame(pd.concat(gdf_list), geometry="line", crs=self.crs)
         edges_df = edges_df.drop_duplicates("node_set")
 
         edges_df.drop("osmid", axis=1, inplace=True)
         edges_df = (
             edges_df.merge(
-                nodes_df[["x", "y", "point", "osmid"]], left_on="u", right_on="osmid"
+                self.nodes_df[["x", "y", "point", "osmid"]],
+                left_on="u",
+                right_on="osmid",
             )
             .rename(columns={"x": "ux", "y": "uy", "point": "u_point"})
             .drop("osmid", axis=1)
             .merge(
-                nodes_df[["x", "y", "point", "osmid"]], left_on="v", right_on="osmid"
+                self.nodes_df[["x", "y", "point", "osmid"]],
+                left_on="v",
+                right_on="osmid",
             )
             .drop("osmid", axis=1)
             .rename(columns={"x": "vx", "y": "vy", "point": "v_point"})
@@ -82,13 +107,13 @@ class StreetNetwork:
 
         edges_df["length"] = edges_df.line.map(lambda x: x.length)
 
-        return edges_df
+        self.edges_df = edges_df
 
     def trim_graph(self):
-        return max(connected_component_subgraphs(self.graph), key=len)
+        self.graph = max(connected_component_subgraphs(self.graph), key=len)
 
     def create_linestring_lookup(self):
-        return {
+        self.linestring_lookup = {
             tuple(sorted(edge)): line
             for edge, line in zip(self.edges_df.node_set, self.edges_df.line)
         }
@@ -106,32 +131,12 @@ class StreetNetwork:
                 )
             ]
         )
-        return graph
+        self.graph = graph
 
     def trim_edges_df(self):
         """Remove rows in edges_df that are not part of the largest connected component."""
         edges_in_graph = set(map(lambda x: tuple(sorted(x)), self.graph.edges.keys()))
         self.edges_df = self.edges_df[self.edges_df.node_set.isin(edges_in_graph)]
-
-    def trim_nodes_df(self):
-        """Remove nodes in nodes_df that are not part of the largest connected component."""
-        nodes_in_graph = set(self.graph.nodes.keys())
-        self.nodes_df = self.nodes_df[self.nodes_df.osmid.isin(nodes_in_graph)]
-
-    def shortest_path_length_between_nodes(self, l_node: int, r_node: int):
-        """Find the length of the shortest path between two nodes."""
-        return nx.shortest_path_length(
-            self.graph, source=l_node, target=r_node, weight="length"
-        )
-
-    def shortest_path_length_between_edges(self, l_edge, r_edge):
-        """Find the length of the shortest path connecting two edges."""
-        return min(
-            (
-                self.shortest_path_length_between_nodes(nodes[0], nodes[1])
-                for nodes in product(l_edge, r_edge)
-            )
-        )
 
     def distance_from_point_to_edge(self, point: Point, edge: tuple):
         """Find the distance from a point to the nearest point on the edge."""
@@ -142,27 +147,20 @@ class StreetNetwork:
 
 
 class DirectedStreetNetwork(StreetNetwork):
-    @staticmethod
-    def create_edges_df(ways_df, nodes_df, crs):
+    def create_edges_df(self):
         intermediate_dfs = []
-        for _, row in ways_df.iterrows():
+        for _, row in self.ways_df.iterrows():
             point_coords = list(row["linestring"].coords)
             segment = [
                 LineString([i, j]) for i, j in zip(point_coords[:-1], point_coords[1:])
             ]
             nodes = row["nodes"]
-            if ("oneway", "yes") in row["tags"].items():
-                edges = [
-                    (from_node, to_node)
-                    for from_node, to_node in zip(nodes[:-1], nodes[1:])
-                ]
-            else:
-                edges = [
-                    (from_node, to_node)
-                    for from_node, to_node in zip(nodes[:-1], nodes[1:])
-                ]
-                edges += list(map(lambda x: tuple(reversed(x)), edges))
-                segment += segment
+            edges = [
+                (from_node, to_node)
+                for from_node, to_node in zip(nodes[:-1], nodes[1:])
+            ]
+            edges += list(map(lambda x: tuple(reversed(x)), edges))
+            segment += segment
             u = list(map(lambda x: x[0], edges))
             v = list(map(lambda x: x[1], edges))
             df = pd.DataFrame(
@@ -170,10 +168,11 @@ class DirectedStreetNetwork(StreetNetwork):
             )
             intermediate_dfs.append(df)
         gdf = gpd.GeoDataFrame(
-            pd.concat(intermediate_dfs), geometry="linestring", crs=crs
+            pd.concat(intermediate_dfs), geometry="linestring", crs=self.crs
         )
         gdf["length"] = gdf.linestring.map(lambda x: x.length)
-        return gdf
+
+        self.edges_df = gdf
 
     def create_graph(self):
         graph = nx.DiGraph()
@@ -186,12 +185,25 @@ class DirectedStreetNetwork(StreetNetwork):
                 for edge, length in zip(self.edges_df.node_set, self.edges_df.length)
             ]
         )
-        return graph
+        self.graph = graph
+
+    def create_linestring_lookup(self):
+        self.linestring_lookup = {
+            tuple(sorted(edge)): line
+            for edge, line in zip(self.edges_df.node_set, self.edges_df.linestring)
+        }
 
     def trim_graph(self):
-        return max(weakly_connected_component_subgraphs(self.graph), key=len)
+        self.graph = max(weakly_connected_component_subgraphs(self.graph), key=len)
 
     def trim_edges_df(self):
         """Remove rows in edges_df that are not part of the largest connected component."""
         edges_in_graph = list(self.graph.edges.keys())
         self.edges_df = self.edges_df[self.edges_df.node_set.isin(edges_in_graph)]
+
+    def distance_from_point_to_edge(self, point: Point, edge: tuple):
+        """Find the distance from a point to the nearest point on the edge."""
+        line = self.linestring_lookup[tuple(sorted(edge[0]))] 
+        closest_points = nearest_points(point, line)
+        ls = LineString([(p.x, p.y) for p in closest_points])
+        return ls.length

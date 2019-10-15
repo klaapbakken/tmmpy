@@ -4,106 +4,21 @@ import numpy as np
 
 from hmm import HiddenMarkovModel, GaussianHiddenMarkovModel
 
+from state_space import DirectedStateSpace, UndirectedStateSpace
 from types import MethodType
 
 
 class GPSMapMatcher:
     def __init__(self, state_space, transition_mode, emission_mode, **kwargs):
-        self.kwargs = kwargs
-        SUPPORTED_EMISSION_MODES = frozenset(["projection", "gaussian"])
-        SUPPORTED_TRANSITION_MODES = frozenset(["exponential", "uniform"])
-        assert emission_mode in SUPPORTED_EMISSION_MODES
-        assert transition_mode in SUPPORTED_TRANSITION_MODES
-        self.transition_mode = transition_mode
-        self.emission_mode = emission_mode
-        if "sigma" in kwargs:
-            self._sigma = kwargs["sigma"]
-        else:
-            self._sigma = 1
+        self.SUPPORTED_EMISSION_MODES = frozenset(["projection", "gaussian"])
+        self.SUPPORTED_TRANSITION_MODES = frozenset(["exponential", "uniform"])
         self.state_space = state_space
-        self._gamma = self.state_space.gamma
-        self.assign_transition_probability(transition_mode)
-        self.create_emission_probability(emission_mode)
-        self.create_hidden_markov_model(emission_mode)
+
+        self.initial_probability = state_space.uniform_initial_probability
+        self.emission_mode = emission_mode
+        self.transition_mode = transition_mode
+
         self.zs = []
-
-    @property
-    def sigma(self):
-        return self._sigma
-
-    @sigma.setter
-    def sigma(self, value):
-        self._sigma = value
-
-    @property
-    def gamma(self):
-        assert self.state_space.gamma == self._gamma
-        return self._gamma
-
-    @gamma.setter
-    def gamma(self, value):
-        self._gamma = self.state_space.gamma = value
-        self.create_hidden_markov_model(self.emission_mode)
-
-    def initial_probability(self, x):
-        return 1 / len(self.state_space)
-
-    def assign_transition_probability(self, transition_mode):
-        if transition_mode == "exponential":
-            self.transition_probability = (
-                self.state_space.exponential_decay_transition_probability
-            )
-        elif transition_mode == "uniform":
-            self.transition_probability = (
-                self.state_space.uniform_transition_probability
-            )
-
-    def create_emission_probability(self, emission_mode):
-        if emission_mode == "projection":
-            assert "sigma" in self.kwargs
-
-            def emission_probability(x, y):
-                distance = self.state_space.street_network.distance_from_point_to_edge(
-                    x, y
-                )
-                return (2 * pi * self.sigma) ** (-1) * exp(
-                    -distance ** 2 / (2 * self.sigma ** 2)
-                )
-
-            self.emission_probability = emission_probability
-        elif emission_mode == "gaussian":
-            midpoints = (
-                self.state_space.street_network.edges_df.apply(
-                    lambda x: x["line"].interpolate(0.5), axis=1
-                )
-                .map(lambda x: (x.x, x.y))
-                .values.tolist()
-            )
-            self.mean = np.array(midpoints)
-            self.covariance = np.tile(
-                self.state_space.street_network.edges_df.length.mean()
-                * np.eye(self.mean.shape[1]),
-                [self.mean.shape[0], 1, 1],
-            )
-
-    def create_hidden_markov_model(self, emission_mode):
-        if emission_mode == "projection":
-            assert hasattr(self, "emission_probability")
-            self.hidden_markov_model = HiddenMarkovModel(
-                self.transition_probability,
-                self.emission_probability,
-                self.initial_probability,
-                self.state_space.states,
-            )
-        elif emission_mode == "gaussian":
-            assert hasattr(self, "mean") and hasattr(self, "covariance")
-            self.hidden_markov_model = GaussianHiddenMarkovModel(
-                self.transition_probability,
-                self.initial_probability,
-                self.state_space.states,
-                self.mean,
-                self.covariance,
-            )
 
     def attach_observations(self, observations, **kwargs):
         self.observations = observations
@@ -114,5 +29,114 @@ class GPSMapMatcher:
         else:
             raise TypeError("Unexpected class in assigned to hidden_markov_model.")
 
+    def create_hidden_markov_model(self):
+        if self.emission_mode == "projection":
+            assert hasattr(self, "emission_probability")
+            self.hidden_markov_model = HiddenMarkovModel(
+                self.transition_probability,
+                self.emission_probability,
+                self.initial_probability,
+                self.state_space.states,
+            )
+        elif self.emission_mode == "gaussian":
+            assert hasattr(self, "mean") and hasattr(self, "covariance")
+            self.hidden_markov_model = GaussianHiddenMarkovModel(
+                self.transition_probability,
+                self.initial_probability,
+                self.state_space.states,
+                self.mean,
+                self.covariance,
+            )
+
     def add_observations(self):
         self.zs.append(self.z)
+
+    def clear_observations(self):
+        self.zs = []
+
+    @property
+    def sigma(self):
+        return self._sigma
+
+    @sigma.setter
+    def sigma(self, value):
+        self._sigma = value
+        self.state_space.sigma = value
+
+    @property
+    def gamma(self):
+        return self._gamma
+
+    @gamma.setter
+    def gamma(self, value):
+        self._gamma = value
+        self.state_space.gamma = value
+
+    @property
+    def mean(self):
+        return self._mean
+
+    @mean.setter
+    def mean(self, value):
+        self._mean = value
+
+    @property
+    def covariance(self):
+        return self._covariance
+
+    @covariance.setter
+    def covariance(self, value):
+        self._covariance = value
+
+    @property
+    def transition_probability(self):
+        return self._transition_probability
+
+    @transition_probability.setter
+    def transition_probability(self, value):
+        self._transition_probability = value
+
+    @property
+    def transition_mode(self):
+        return self._transition_mode
+
+    @transition_mode.setter
+    def transition_mode(self, value):
+        assert value in self.SUPPORTED_TRANSITION_MODES
+        if value == "exponential":
+            self.transition_probability = (
+                self.state_space.exponential_decay_transition_probability
+            )
+        elif value == "uniform":
+            self.transition_probability = (
+                self.state_space.uniform_transition_probability
+            )
+        self._transition_mode = value
+        if hasattr(self, "_emission_probability") and hasattr(self, "_transition_probability"):
+            self.create_hidden_markov_model()
+
+    @property
+    def emission_probability(self):
+        return self._emission_probability
+
+    @emission_probability.setter
+    def emission_probability(self, value):
+        self._emission_probability = value
+
+    @property
+    def emission_mode(self):
+        return self._emission_mode
+
+    @emission_mode.setter
+    def emission_mode(self, value):
+        assert value in self.SUPPORTED_EMISSION_MODES
+        if value == "projection":
+            self.mean = None
+            self.covariance = None
+            self.emission_probability = self.state_space.projection_emission_probability
+        elif value == "gaussian":
+            self.emission_probability = None
+            self.mean, self.covariance = self.state_space.gaussian_emission_parameters
+        self._emission_mode = value
+        if hasattr(self, "_emission_probability") and hasattr(self, "_transition_probability"):
+            self.create_hidden_markov_model()

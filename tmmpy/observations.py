@@ -1,6 +1,6 @@
 from data_interface import PostGISQuery
 from street_network import StreetNetwork
-from state_space import SegmentStateSpace
+from state_space import UndirectedStateSpace
 
 import numpy as np
 import pandas as pd
