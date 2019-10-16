@@ -147,7 +147,8 @@ class DirectedStateSpace(StateSpace):
                 ),
             )
             for connection in possible_previous_connections:
-                states.append((segment, connection))
+                if len(set(segment).intersection(set(connection))) == 1:
+                    states.append((connection, segment))
         self.states = states
 
     def exponential_decay_transition_probability(self, x, y):
