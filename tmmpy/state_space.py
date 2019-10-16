@@ -132,9 +132,9 @@ class DirectedStateSpace(StateSpace):
         return len(self.states)
 
     def create_states(self):
-        states = []
-        for _, row in self.street_network.edges_df.iterrows():
-            segment = row["node_set"]
+        states_set = set()
+        for edge in iter(self.street_network.graph.edges.keys()):
+            node_set = frozenset(edge)
             possible_previous_connections = reduce(
                 lambda x, y: x + y,
                 map(
@@ -143,13 +143,13 @@ class DirectedStateSpace(StateSpace):
                             [], self.street_network.graph[x].keys(), fillvalue=x
                         )
                     ),
-                    segment,
+                    node_set,
                 ),
             )
-            for connection in possible_previous_connections:
-                if len(set(segment).intersection(set(connection))) == 1:
-                    states.append((connection, segment))
-        self.states = states
+            for connection in map(frozenset, possible_previous_connections):
+                if connection != node_set:
+                    states_set.add((node_set, connection))
+            self.states = list(states_set)
 
     def exponential_decay_transition_probability(self, x, y):
         ex = x[0]

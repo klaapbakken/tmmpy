@@ -30,6 +30,63 @@ class GPSSimulator:
                 node: num for node, num in zip(connected_nodes, rnum)
             }
 
+    @staticmethod
+    def flow_to_transition_matrix(f, v, state_ids, states, graph, flow):
+        state_to_id_dict = {state : state_id for state_id, state in zip(state_ids, states)}
+
+        distance_per_measurement = v/f
+
+        M = len(states)
+        P = np.zeros((M, M))
+
+        #Iterate through all states
+        for segment_set, connection_set in states:
+            segment = tuple(segment_set)
+            connection = tuple(connection_set)
+            #Find the node present in both connection and segment
+            shared_node = set(segment).intersection(set(connection))
+            segment_length = graph[segment[0]][segment[1]]["length"]
+            #The node we move on from
+            departure_node = segment_set.difference(shared_node)
+            assert len(departure_node) == 1
+            #Convert to string, since flow is read from JSON and keys are strings.
+            departure_key = str(list(departure_node)[0])
+            #Nodes connected to the departure node
+            connected_keys = set(flow[departure_key].keys())
+            i = state_to_id_dict[(segment_set, connection_set)]
+            ws = []
+            if len(connected_keys) == 1:
+                #We've reached a dead end.
+                deadend_key = departure_key
+                #We need to travel back and forth on dead end segment
+                num_self_transitions = (2*segment_length - distance_per_measurement/2)/distance_per_measurement
+                #We now depart from the shared node
+                new_departure_key = str(list(shared_node)[0])
+                #Connected keys are those nodes leading away from the shared node
+                new_connected_keys = set(flow[new_departure_key].keys())
+                #Extracting the weights
+                for key in new_connected_keys.difference(set([deadend_key])):
+                    ws.append(flow[new_departure_key][key])
+                ws.append(num_self_transitions*sum(ws))
+                ps = np.array(ws)/np.sum(ws)
+                #Moving away from the following state
+                for n, key in enumerate(new_connected_keys.difference(set([deadend_key]))):
+                    j = state_to_id_dict[(frozenset([int(new_departure_key), int(key)]), (segment_set))]
+                    P[i, j] = ps[n]
+                P[i, i] = ps[-1]
+            else:
+                #Expected number of transitions to same state
+                num_self_transitions = (segment_length - distance_per_measurement/2)/distance_per_measurement
+                for key in connected_keys.difference(set(map(str, shared_node))):
+                    ws.append(flow[departure_key][key])
+                ws.append(num_self_transitions*sum(ws))
+                ps = np.array(ws)/sum(ws)
+                for n, key in enumerate(connected_keys.difference(set(map(str, shared_node)))):
+                    j = state_to_id_dict[(frozenset([int(departure_key), int(key)]), (segment_set))]
+                    P[i, j] = ps[n]
+                P[i, i] = ps[-1]
+        return P
+
     def simulate_node_sequence(self, route_length):
         starting_position = list(
             random.choice(list(self.street_network.graph.edges.keys()))
