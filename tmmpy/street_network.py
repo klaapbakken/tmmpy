@@ -75,16 +75,16 @@ class UndirectedStreetNetwork(StreetNetwork):
                     "u": pd.Series(us, dtype=np.int64),
                     "v": pd.Series(vs, dtype=np.int64),
                     "osmid": osmid,
-                    "line": lines,
+                    "linestring": lines,
                 },
-                geometry="line",
+                geometry="linestring",
             )
             gdf["node_set"] = pd.Series(
                 [tuple(sorted([u, v])) for u, v in zip(gdf.u, gdf.v)]
             )
             gdf_list.append(gdf)
 
-        edges_df = gpd.GeoDataFrame(pd.concat(gdf_list), geometry="line", crs=self.crs)
+        edges_df = gpd.GeoDataFrame(pd.concat(gdf_list), geometry="linestring", crs=self.crs)
         edges_df = edges_df.drop_duplicates("node_set")
 
         edges_df.drop("osmid", axis=1, inplace=True)
@@ -105,7 +105,7 @@ class UndirectedStreetNetwork(StreetNetwork):
             .rename(columns={"x": "vx", "y": "vy", "point": "v_point"})
         )
 
-        edges_df["length"] = edges_df.line.map(lambda x: x.length)
+        edges_df["length"] = edges_df.linestring.map(lambda x: x.length)
 
         self.edges_df = edges_df
 
@@ -115,7 +115,7 @@ class UndirectedStreetNetwork(StreetNetwork):
     def create_linestring_lookup(self):
         self.linestring_lookup = {
             tuple(sorted(edge)): line
-            for edge, line in zip(self.edges_df.node_set, self.edges_df.line)
+            for edge, line in zip(self.edges_df.node_set, self.edges_df.linestring)
         }
 
     def create_graph(self):
@@ -127,7 +127,7 @@ class UndirectedStreetNetwork(StreetNetwork):
             [
                 (edge[0], edge[1], {"length": length, "line": line})
                 for edge, length, line in zip(
-                    self.edges_df.node_set, self.edges_df.length, self.edges_df.line
+                    self.edges_df.node_set, self.edges_df.length, self.edges_df.linestring
                 )
             ]
         )
@@ -181,8 +181,8 @@ class DirectedStreetNetwork(StreetNetwork):
         )
         graph.add_edges_from(
             [
-                (edge[0], edge[1], {"length": length})
-                for edge, length in zip(self.edges_df.node_set, self.edges_df.length)
+                (edge[0], edge[1], {"length": length, "line" : line})
+                for edge, length, line in zip(self.edges_df.node_set, self.edges_df.length, self.edges_df.linestring)
             ]
         )
         self.graph = graph

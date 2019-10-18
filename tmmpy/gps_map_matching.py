@@ -37,6 +37,7 @@ class GPSMapMatcher:
                 self.emission_probability,
                 self.initial_probability,
                 self.state_space.states,
+                enable_warnings=True
             )
         elif self.emission_mode == "gaussian":
             assert hasattr(self, "mean") and hasattr(self, "covariance")
@@ -46,6 +47,7 @@ class GPSMapMatcher:
                 self.state_space.states,
                 self.mean,
                 self.covariance,
+                enable_warnings=True
             )
 
     def add_observations(self):
