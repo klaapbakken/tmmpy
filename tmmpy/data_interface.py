@@ -464,11 +464,12 @@ class NVDBAPIQuery:
         nodes_df["y"] = nodes_df.point.map(lambda x: x.y)
 
         self.ways_df = ways_df
-        self.nodes_df = nodes_df.drop_duplicates("osmid")
+        self.nodes_df = nodes_df.drop_duplicates("osmid").reset_index(drop=True)
 
     def transform(self, epsg):
-        self.ways_df.to_crs(crs=fiona.crs.from_epsg(epsg), inplace=True)
-        self.nodes_df.to_crs(crs=fiona.crs.from_epsg(epsg), inplace=True)
+        self.ways_df = self.ways_df.to_crs(crs=fiona.crs.from_epsg(epsg))
+        #Error occurs in the following line.
+        self.nodes_df = self.nodes_df.to_crs(crs=fiona.crs.from_epsg(epsg))
         self.nodes_df["x"] = self.nodes_df.point.map(lambda x: x.x)
         self.nodes_df["y"] = self.nodes_df.point.map(lambda x: x.y)
         return self

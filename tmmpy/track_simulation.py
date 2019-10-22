@@ -1,7 +1,7 @@
 from shapely.geometry import Polygon
-from shapely.geometry import Point
+from shapely.geometry import Point, LineString
 from shapely.geometry import MultiLineString
-from shapely.ops import linemerge
+from shapely.ops import linemerge, split
 
 from scipy.stats import multivariate_normal
 
@@ -61,11 +61,15 @@ class GPSSimulator:
         self.node_sequence = node_sequence
 
     def simulate_gps_tracks(self, mps, frequency, sigma):
+        i_edge = self.edge_sequence[0]
+        ils = self.street_network.graph[i_edge[0]][i_edge[1]]["line"]
+        p = ils.interpolate(random.uniform(0, 1), normalized=True)
+        split_ils = LineString([list(p.coords[0])] + [list(ils.coords[1])])
+
         mls = MultiLineString(
-            [self.street_network.graph[a][b]["line"] for a, b in self.edge_sequence]
+            [split_ils] + [self.street_network.graph[a][b]["line"] for a, b in self.edge_sequence[1:]]
         )
         ls = linemerge(mls)
-        ls.length
         fractions = np.arange(0, ls.length, step=mps / frequency)
         self.positions = [ls.interpolate(x) for x in fractions]
         noise = multivariate_normal.rvs(mean=np.array([0, 0]), cov=sigma * np.eye(2))

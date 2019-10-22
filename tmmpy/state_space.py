@@ -154,9 +154,7 @@ class DirectedStateSpace(StateSpace):
     def exponential_decay_transition_probability(self, x, y):
         ex = x[0]
         ey = y[0]
-        distance = min(
-            [self.shortest_path_dictionary[s][t] for s, t in product(ex, ey)]
-        )
+        distance = self.compute_distance(ex, ey)
         return exp(-self.gamma * distance)
 
     def projection_emission_probability(self, z, x):
@@ -164,6 +162,29 @@ class DirectedStateSpace(StateSpace):
         return (2 * pi * self.sigma) ** (-1) * exp(
             -distance ** 2 / (2 * self.sigma ** 2)
         )
+
+    def compute_distance(self, x, y):
+        if x==y:
+            distance = 0
+        else:
+            x_shared = self.get_shared_node(x)
+            y_predecessor = self.get_predecessor_node(y)
+            y_shared = self.get_shared_node(y)
+            l1 = self.shortest_path_dictionary[x_shared][y_predecessor]
+            l2 = self.shortest_path_dictionary[y_predecessor][y_shared]
+            distance = sum([l1, l2])
+        return distance
+
+    @staticmethod
+    def get_shared_node(state):
+        segment, connection = state
+        return list(segment.intersection(connection))[0]
+
+    @staticmethod
+    def get_predecessor_node(state):
+        _, connection = state
+        shared_node = DirectedStateSpace.get_shared_node(state)
+        return list(connection.difference(shared_node))[0]
 
     @staticmethod
     def node_path_to_edge_path(node_path):
