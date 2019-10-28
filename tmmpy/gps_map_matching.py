@@ -11,7 +11,7 @@ from types import MethodType
 class GPSMapMatcher:
     def __init__(self, state_space, transition_mode, emission_mode, **kwargs):
         self.SUPPORTED_EMISSION_MODES = frozenset(["projection", "gaussian"])
-        self.SUPPORTED_TRANSITION_MODES = frozenset(["exponential", "uniform"])
+        self.SUPPORTED_TRANSITION_MODES = frozenset(["exponential", "exponential_constrained", "uniform"])
         self.state_space = state_space
 
         self.initial_probability = state_space.uniform_initial_probability
@@ -112,6 +112,11 @@ class GPSMapMatcher:
         elif value == "uniform":
             self.transition_probability = (
                 self.state_space.uniform_transition_probability
+            )
+        elif value == "exponential_constrained":
+            assert type(self.state_space) == DirectedStateSpace
+            self.transition_probability = (
+                self.state_space.exponential_decay_constrained_transition_probability
             )
         self._transition_mode = value
         if hasattr(self, "_emission_probability") and hasattr(self, "_transition_probability"):

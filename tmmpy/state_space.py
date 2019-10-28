@@ -119,6 +119,7 @@ class DirectedStateSpace(StateSpace):
                 network.graph, weight="length"
             )
         }
+        self.compute_legal_transitions()
         if "gamma" in kwargs:
             self.gamma = kwargs["gamma"]
         else:
@@ -152,9 +153,7 @@ class DirectedStateSpace(StateSpace):
             self.states = list(states_set)
 
     def exponential_decay_transition_probability(self, x, y):
-        ex = x[0]
-        ey = y[0]
-        distance = self.compute_distance(ex, ey)
+        distance = self.compute_distance(x, y)
         return exp(-self.gamma * distance)
 
     def projection_emission_probability(self, z, x):
@@ -162,6 +161,25 @@ class DirectedStateSpace(StateSpace):
         return (2 * pi * self.sigma) ** (-1) * exp(
             -distance ** 2 / (2 * self.sigma ** 2)
         )
+
+    def exponential_decay_constrained_transition_probability(self, x, y):
+        legal_transition = int(self.legal_transitions[x][y])
+        return self.exponential_decay_transition_probability(x, y)*legal_transition
+    
+    def compute_legal_transitions(self):
+        self.legal_transitions = {}
+        for outer_state in self.states:
+            outer_segment, _ = outer_state
+            inner_dict = {}
+            for inner_state in self.states:
+                _, inner_connection = inner_state
+                if inner_connection == outer_segment:
+                    inner_dict[inner_state] = True
+                elif outer_state == inner_state:
+                    inner_dict[inner_state] = True
+                else:
+                    inner_dict[inner_state] = False
+            self.legal_transitions[outer_state] = inner_dict
 
     def compute_distance(self, x, y):
         if x==y:
@@ -183,7 +201,7 @@ class DirectedStateSpace(StateSpace):
     @staticmethod
     def get_predecessor_node(state):
         _, connection = state
-        shared_node = DirectedStateSpace.get_shared_node(state)
+        shared_node = frozenset([DirectedStateSpace.get_shared_node(state)])
         return list(connection.difference(shared_node))[0]
 
     @staticmethod

@@ -72,9 +72,9 @@ class GPSSimulator:
         ls = linemerge(mls)
         fractions = np.arange(0, ls.length, step=mps / frequency)
         self.positions = [ls.interpolate(x) for x in fractions]
-        noise = multivariate_normal.rvs(mean=np.array([0, 0]), cov=sigma * np.eye(2))
+        noise = [multivariate_normal.rvs(mean=np.array([0, 0]), cov=sigma * np.eye(2)) for _ in range(len(self.positions))]
         observations = list(
-            map(lambda x: Point(x.x + noise[0], x.y + noise[1]), self.positions)
+            map(lambda x: Point(x[0].x + x[1][0], x[0].y + x[1][1]), zip(self.positions, noise))
         )
         self.track = gpd.GeoSeries(observations, crs=self.crs)
 
