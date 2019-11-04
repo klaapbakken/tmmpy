@@ -9,6 +9,7 @@ from itertools import zip_longest
 from abc import ABC
 
 from networkx.algorithms.shortest_paths.weighted import all_pairs_dijkstra_path_length
+from networkx import all_pairs_dijkstra_path
 
 
 class StateSpace:
@@ -62,6 +63,12 @@ class UndirectedStateSpace(StateSpace):
         assert type(network) is UndirectedStreetNetwork
         self.street_network = network
         self.states = network.edges_df.node_set.values.tolist()
+        self.shortest_paths = {
+            source: target_dict
+            for source, target_dict in all_pairs_dijkstra_path(
+                self.street_network.graph, weight="length"
+            )
+        }
         self.shortest_path_dictionary = {
             source: target_dict
             for source, target_dict in all_pairs_dijkstra_path_length(
@@ -91,6 +98,25 @@ class UndirectedStateSpace(StateSpace):
             -distance ** 2 / (2 * self.sigma ** 2)
         )
 
+    def stitch_segments(self, segment_sequence):
+        path = []
+        path.append(segment_sequence[0])
+        for previous, current in zip(segment_sequence[:-1], segment_sequence[1:]):
+            common_nodes = set(previous).intersection(set(current))
+            if len(common_nodes) == 2:
+                continue
+            elif len(common_nodes) == 1:
+                path.append(current)
+            else:
+                assert len(common_nodes) == 0
+                shortest_path_candidates_lengths = [(a, b, self.shortest_path_dictionary[a][b]) for a, b in product(previous, current)]
+                a, b, _ = min(shortest_path_candidates_lengths, key=lambda x: x[2])
+                shortest_path = self.shortest_paths[a][b]
+                for node_set in list(zip(shortest_path[:-1], shortest_path[1:])):
+                    path.append(tuple(sorted(node_set)))
+                path.append(current)
+        return path
+
     @property
     def gaussian_emission_parameters(self):
         midpoints = (
@@ -117,6 +143,12 @@ class DirectedStateSpace(StateSpace):
             source: target_dict
             for source, target_dict in all_pairs_dijkstra_path_length(
                 network.graph, weight="length"
+            )
+        }
+        self.shortest_paths = {
+            source: target_dict
+            for source, target_dict in all_pairs_dijkstra_path(
+                self.street_network.graph, weight="length"
             )
         }
         self.compute_legal_transitions()
@@ -184,14 +216,45 @@ class DirectedStateSpace(StateSpace):
     def compute_distance(self, x, y):
         if x==y:
             distance = 0
+        elif x[0] == y[1]:
+            y_shared = self.get_shared_node(y)
+            y_departure = self.get_departure_node(y)
+            distance = self.shortest_path_dictionary[y_shared][y_departure]
         else:
-            x_shared = self.get_shared_node(x)
+            x_departure = self.get_departure_node(x)
             y_predecessor = self.get_predecessor_node(y)
             y_shared = self.get_shared_node(y)
-            l1 = self.shortest_path_dictionary[x_shared][y_predecessor]
+            y_departure = self.get_departure_node(y)
+            l1 = self.shortest_path_dictionary[x_departure][y_predecessor]
             l2 = self.shortest_path_dictionary[y_predecessor][y_shared]
-            distance = sum([l1, l2])
+            l3 = self.shortest_path_dictionary[y_shared][y_departure]
+            distance = sum([l1, l2, l3])
         return distance
+
+    def stitch_segments(self, sequence):
+        path = []
+        departure_node = DirectedStateSpace.get_departure_node(sequence[0])
+        shared_node = DirectedStateSpace.get_shared_node(sequence[0])
+        path.append(shared_node)
+        path.append(departure_node)
+        for previous, current in zip(sequence[:-1], sequence[1:]):
+            p_segment, _ = previous
+            _, c_connection = current
+            
+            previous_departure_node = DirectedStateSpace.get_departure_node(previous)
+            predecessor_node = DirectedStateSpace.get_predecessor_node(current)
+            shared_node = DirectedStateSpace.get_shared_node(current)
+            departure_node = DirectedStateSpace.get_departure_node(current)
+            
+            if previous == current:
+                continue
+            elif p_segment == c_connection:
+                path += [departure_node]
+            else:
+                path_to_predeccesor = self.shortest_paths[previous_departure_node][predecessor_node]
+                path += path_to_predeccesor[1:] + [shared_node] + [departure_node]        
+            
+        return [tuple(sorted([p,c])) for p, c in zip(path[:-1], path[1:])]
 
     @staticmethod
     def get_shared_node(state):
@@ -203,6 +266,12 @@ class DirectedStateSpace(StateSpace):
         _, connection = state
         shared_node = frozenset([DirectedStateSpace.get_shared_node(state)])
         return list(connection.difference(shared_node))[0]
+
+    @staticmethod
+    def get_departure_node(state):
+        segment, _ = state
+        shared_node = frozenset([DirectedStateSpace.get_shared_node(state)])
+        return list(segment.difference(shared_node))[0]
 
     @staticmethod
     def node_path_to_edge_path(node_path):

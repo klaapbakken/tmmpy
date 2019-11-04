@@ -1,7 +1,7 @@
 from shapely.geometry import Polygon
 from shapely.geometry import Point, LineString
 from shapely.geometry import MultiLineString
-from shapely.ops import linemerge, split
+from shapely.ops import linemerge, split, nearest_points
 
 from scipy.stats import multivariate_normal
 
@@ -72,7 +72,7 @@ class GPSSimulator:
         ls = linemerge(mls)
         fractions = np.arange(0, ls.length, step=mps / frequency)
         self.positions = [ls.interpolate(x) for x in fractions]
-        noise = [multivariate_normal.rvs(mean=np.array([0, 0]), cov=sigma * np.eye(2)) for _ in range(len(self.positions))]
+        noise = [multivariate_normal.rvs(mean=np.array([0, 0]), cov=(sigma**2) * np.eye(2)) for _ in range(len(self.positions))]
         observations = list(
             map(lambda x: Point(x[0].x + x[1][0], x[0].y + x[1][1]), zip(self.positions, noise))
         )
@@ -153,6 +153,20 @@ class GPSSimulator:
             tuple(sorted([i, j]))
             for i, j in zip(self.node_sequence[:-1], self.node_sequence[1:])
         ]
+
+    @property
+    def measurement_edges(self):
+        lines = self.street_network.edges_df.linestring.values
+        node_sets = self.street_network.edges_df.node_set.values
+
+        measurement_node_sets = []
+        for position in self.positions:
+            candidates = [nearest_points(position, line) for line in lines]
+            lengths = list(map(lambda x: LineString([(p.x, p.y) for p in x]).length, candidates))
+            _, index = min(zip(lengths, range(len(lengths))), key=lambda x: x[0])
+            measurement_node_set = node_sets[index]
+            measurement_node_sets.append(tuple(sorted(measurement_node_set)))
+        return measurement_node_sets
 
     @property
     def gdf(self):
