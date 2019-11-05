@@ -17,12 +17,10 @@ import random
 
 
 class GPSSimulator:
-    def __init__(self, map_matcher, polling_frequency, mps):
-        self.map_matcher = map_matcher
-        self.street_network = map_matcher.state_space.street_network
-        self.crs = self.street_network.edges_df.crs
-        self.f = polling_frequency
-        self.v = mps
+    def __init__(self, state_space):
+        self.state_space = state_space
+        self.street_network = state_space.street_network
+        self.crs = state_space.street_network.edges_df.crs
 
     def define_flow(self):
         self.flow_dictionary = {}
@@ -61,28 +59,54 @@ class GPSSimulator:
         self.node_sequence = node_sequence
 
     def simulate_gps_tracks(self, mps, frequency, sigma):
-        i_edge = self.edge_sequence[0]
-        ils = self.street_network.graph[i_edge[0]][i_edge[1]]["line"]
-        p = ils.interpolate(random.uniform(0, 1), normalized=True)
-        split_ils = LineString([list(p.coords[0])] + [list(ils.coords[1])])
+        dpm = mps/frequency
+        measurement_edges = []
+        measurement_positions = []
 
-        mls = MultiLineString(
-            [split_ils] + [self.street_network.graph[a][b]["line"] for a, b in self.edge_sequence[1:]]
-        )
-        ls = linemerge(mls)
-        fractions = np.arange(0, ls.length, step=mps / frequency)
-        self.positions = [ls.interpolate(x) for x in fractions]
-        noise = [multivariate_normal.rvs(mean=np.array([0, 0]), cov=(sigma**2) * np.eye(2)) for _ in range(len(self.positions))]
+        initial_node = self.node_sequence[0]
+        initial_node_coords = list(self.street_network.point_lookup[initial_node].coords)[0]
+
+        measurement_edges.append(tuple(sorted([initial_node, self.node_sequence[1]])))
+        measurement_positions.append(Point([initial_node_coords[0], initial_node_coords[1]]))
+
+        remaining_space = 0
+        for previous_node, current_node in zip(self.node_sequence[:-1], self.node_sequence[1:]):
+            previous_node_coords = list(self.street_network.point_lookup[previous_node].coords)[0]
+            current_node_coords = list(self.street_network.point_lookup[current_node].coords)[0]
+            
+            line = LineString([previous_node_coords, current_node_coords])
+            length = line.length
+            #Can move this far
+            available_space = length
+            #Need to be able to move this far
+            required_space = dpm - remaining_space
+            #Distance covered so far on segment
+            distance_covered = 0
+            while available_space >= required_space:
+                p = line.interpolate(distance_covered + required_space)
+                distance_covered += required_space
+                p_coords = list(p.coords)[0]
+                measurement_edges.append(tuple(sorted([previous_node, current_node])))
+                measurement_positions.append(Point([p_coords[0], p_coords[1]]))
+                available_space -= required_space
+                required_space = dpm
+                remaining_space = 0
+            remaining_space += available_space
+
+        self.positions = measurement_positions
+        self.measurement_edges = list(map(lambda x: tuple(sorted(x)), measurement_edges))
+
+        noise = [multivariate_normal.rvs(mean=np.array([0, 0]), cov=(sigma**2) * np.eye(2)) for _ in range(len(measurement_positions))]
         observations = list(
-            map(lambda x: Point(x[0].x + x[1][0], x[0].y + x[1][1]), zip(self.positions, noise))
+            map(lambda x: Point(x[0].x + x[1][0], x[0].y + x[1][1]), zip(measurement_positions, noise))
         )
         self.track = gpd.GeoSeries(observations, crs=self.crs)
 
-    def flow_to_transition_matrix(self):
-        f = self.f
-        v = self.v
-        state_ids = self.map_matcher.hidden_markov_model.state_ids
-        states = self.map_matcher.hidden_markov_model.states
+    def flow_to_transition_matrix(self, mps, polling_frequency):
+        f = polling_frequency
+        v = mps
+        states = self.state_space.states
+        state_ids = np.arange(len(states))
         graph = self.street_network.graph
         flow = self.flow_dictionary
         
@@ -153,20 +177,6 @@ class GPSSimulator:
             tuple(sorted([i, j]))
             for i, j in zip(self.node_sequence[:-1], self.node_sequence[1:])
         ]
-
-    @property
-    def measurement_edges(self):
-        lines = self.street_network.edges_df.linestring.values
-        node_sets = self.street_network.edges_df.node_set.values
-
-        measurement_node_sets = []
-        for position in self.positions:
-            candidates = [nearest_points(position, line) for line in lines]
-            lengths = list(map(lambda x: LineString([(p.x, p.y) for p in x]).length, candidates))
-            _, index = min(zip(lengths, range(len(lengths))), key=lambda x: x[0])
-            measurement_node_set = node_sets[index]
-            measurement_node_sets.append(tuple(sorted(measurement_node_set)))
-        return measurement_node_sets
 
     @property
     def gdf(self):

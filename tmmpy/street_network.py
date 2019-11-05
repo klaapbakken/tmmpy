@@ -33,6 +33,7 @@ class StreetNetwork(ABC):
         self.trim_graph()
         self.trim_edges_df()
         self.create_linestring_lookup()
+        self.create_point_lookup()
 
     @abstractmethod
     def create_edges_df(self):
@@ -40,6 +41,10 @@ class StreetNetwork(ABC):
 
     @abstractmethod
     def create_linestring_lookup(self):
+        pass
+
+    @abstractmethod
+    def create_point_lookup(self):
         pass
 
     @abstractmethod
@@ -118,6 +123,9 @@ class UndirectedStreetNetwork(StreetNetwork):
             for edge, line in zip(self.edges_df.node_set, self.edges_df.linestring)
         }
 
+    def create_point_lookup(self):
+        self.point_lookup = {node : point for node, point in zip(self.nodes_df.osmid, self.nodes_df.point)}
+
     def create_graph(self):
         """Creates a graph, with each node being a node from the data source and each edge being an individual segment
         from the segment that makes out the ways."""
@@ -192,6 +200,9 @@ class DirectedStreetNetwork(StreetNetwork):
             tuple(sorted(edge)): line
             for edge, line in zip(self.edges_df.node_set, self.edges_df.linestring)
         }
+
+    def create_point_lookup(self):
+        self.point_lookup = {node : point for node, point in zip(self.nodes_df.osmid, self.nodes_df.point)}
 
     def trim_graph(self):
         self.graph = max(weakly_connected_component_subgraphs(self.graph), key=len)
