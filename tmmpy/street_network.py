@@ -28,11 +28,11 @@ class StreetNetwork(ABC):
         self.ways_df = data.ways_df
 
         self.create_edges_df()
-        self.create_linestring_lookup()
         self.create_graph()
 
         self.trim_graph()
         self.trim_edges_df()
+        self.create_linestring_lookup()
 
     @abstractmethod
     def create_edges_df(self):

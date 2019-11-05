@@ -238,21 +238,26 @@ class DirectedStateSpace(StateSpace):
         path.append(shared_node)
         path.append(departure_node)
         for previous, current in zip(sequence[:-1], sequence[1:]):
-            p_segment, _ = previous
-            _, c_connection = current
+            p_segment, p_connection = previous
+            c_segment, c_connection = current
             
             previous_departure_node = DirectedStateSpace.get_departure_node(previous)
+            previous_shared_node = DirectedStateSpace.get_shared_node(previous)
             predecessor_node = DirectedStateSpace.get_predecessor_node(current)
             shared_node = DirectedStateSpace.get_shared_node(current)
             departure_node = DirectedStateSpace.get_departure_node(current)
             
             if previous == current:
                 continue
-            elif p_segment == c_connection:
+            elif p_segment == c_connection and previous_shared_node != shared_node:
                 path += [departure_node]
+            elif p_segment == c_connection and previous_shared_node == shared_node:
+                path += [shared_node] + [departure_node]
+            elif previous_departure_node == predecessor_node:
+                path += [shared_node] + [departure_node]
             else:
                 path_to_predeccesor = self.shortest_paths[previous_departure_node][predecessor_node]
-                path += path_to_predeccesor[1:] + [shared_node] + [departure_node]        
+                path += path_to_predeccesor[1:-1] + [predecessor_node] + [shared_node] + [departure_node]        
             
         return [tuple(sorted([p,c])) for p, c in zip(path[:-1], path[1:])]
 
