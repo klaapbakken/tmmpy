@@ -38,6 +38,7 @@ class GPSSimulator:
         random.shuffle(starting_position)
         node_sequence = []
         previous_node = starting_position[0]
+        self.initial_node = previous_node
         current_node = starting_position[1]
         length = 0
         node_sequence.append(current_node)
@@ -62,6 +63,7 @@ class GPSSimulator:
         dpm = mps/frequency
         measurement_edges = []
         measurement_positions = []
+        measurement_edge_indices = []
 
         initial_node = self.node_sequence[0]
         initial_node_coords = list(self.street_network.point_lookup[initial_node].coords)[0]
@@ -69,6 +71,7 @@ class GPSSimulator:
         measurement_edges.append(tuple(sorted([initial_node, self.node_sequence[1]])))
         measurement_positions.append(Point([initial_node_coords[0], initial_node_coords[1]]))
 
+        counter = 0
         remaining_space = 0
         for previous_node, current_node in zip(self.node_sequence[:-1], self.node_sequence[1:]):
             previous_node_coords = list(self.street_network.point_lookup[previous_node].coords)[0]
@@ -88,13 +91,16 @@ class GPSSimulator:
                 p_coords = list(p.coords)[0]
                 measurement_edges.append(tuple(sorted([previous_node, current_node])))
                 measurement_positions.append(Point([p_coords[0], p_coords[1]]))
+                measurement_edge_indices.append(counter)
                 available_space -= required_space
                 required_space = dpm
                 remaining_space = 0
             remaining_space += available_space
-
+            counter += 1
+        
         self.positions = measurement_positions
         self.measurement_edges = list(map(lambda x: tuple(sorted(x)), measurement_edges))
+        self.measurement_edge_indices = measurement_edge_indices
 
         noise = [multivariate_normal.rvs(mean=np.array([0, 0]), cov=(sigma**2) * np.eye(2)) for _ in range(len(measurement_positions))]
         observations = list(
