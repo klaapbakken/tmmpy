@@ -17,6 +17,36 @@ from shapely.wkt import loads
 import fiona
 import requests
 
+from fiona.transform import transform
+from shapely.geometry import Polygon
+
+class BoundingBox:
+    def __init__(self, bounding_box, in_epsg, out_epsg):
+        self.in_crs = fiona.crs.from_epsg(in_epsg)
+        self.out_crs = fiona.crs.from_epsg(out_epsg)
+        xmin, xmax, ymin, ymax = bounding_box
+        in_polygon = Polygon([[xmin, ymin], [xmin, ymax], [xmax, ymax], [xmax, ymin]])
+        self.out_polygon = self._transform_polygon(in_polygon, self.in_crs, self.out_crs)
+    
+    def _transform_polygon(self, polygon, in_crs, out_crs):
+        xs = np.array(list(polygon.boundary.coords))[:, 0]
+        ys = np.array(list(polygon.boundary.coords))[:, 1]
+        nxs, nys = transform(in_crs, out_crs, xs, ys)
+        return Polygon(list(zip(nxs, nys)))
+    
+    def polygon_to_epsg(self, out_epsg):
+        out_crs = fiona.crs.from_epsg(out_epsg)
+        return self._transform_polygon(self.out_polygon, self.out_crs, out_crs)
+        
+    @property
+    def as_polygon(self):
+        return self.out_polygon
+        
+    @property
+    def as_tuple(self):
+        bounding_box = self.out_polygon.bounds
+        return (bounding_box[0], bounding_box[2], bounding_box[1], bounding_box[3])
+
 
 class PostGISQuery:
     """
@@ -25,13 +55,13 @@ class PostGISQuery:
 
     Parameters:
     ---
-    database -- Name of the database \n
-    user -- Name of user with access to database \n
-    password -- Password for user \n
-    epsg -- Coordinate reference system the data should be converted to \n
-    bounding_box -- Tuple of coordinates (xmin, xmax, ymin, ymax) \n
-    nodes_table -- Name of the table where nodes are stored \n
-    ways_table -- Name of the table where ways are stored \n
+    database -- Name of the database
+    user -- Name of user with access to database
+    password -- Password for user
+    epsg -- Coordinate reference system the data should be converted to
+    bounding_box -- Tuple of coordinates (xmin, xmax, ymin, ymax)
+    nodes_table -- Name of the table where nodes are stored
+    ways_table -- Name of the table where ways are stored
     filter_dictionary -- Dictionary that specifies which keys and values are allowed in tags. Ways that do not match any of the key-value pairs are removed
     """
 
@@ -48,6 +78,7 @@ class PostGISQuery:
     ):
         """See class documentation."""
         self.LONLAT_CRS = fiona.crs.from_epsg(4326)
+        self.LONLAT_EPSG = 4326
         self.con = psycopg2.connect(
             database=database, user=user, password=password, host="localhost"
         )
@@ -60,6 +91,7 @@ class PostGISQuery:
         self.ways_table = ways_table
         self.xmin, self.xmax, self.ymin, self.ymax = bounding_box
         self.query_bounding_box()
+        self.bounding_box = BoundingBox(bounding_box, self.LONLAT_EPSG, epsg)
 
     def get_nodes_by_id(self, ids: list):
         """Retrieve nodes by their ID."""
@@ -190,6 +222,7 @@ class OverpassAPIQuery:
     ):
         """See class documentation."""
         self.LONLAT_CRS = fiona.crs.from_epsg(4326)
+        self.LONLAT_EPSG = 4326
         self.api = overpy.Overpass()
         self.nodes_df = None
         self.ways_df = None
@@ -198,6 +231,7 @@ class OverpassAPIQuery:
         self.filter_dictionary = filter_dictionary
         self.xmin, self.xmax, self.ymin, self.ymax = bounding_box
         self.query_bounding_box()
+        self.bounding_box = BoundingBox(bounding_box, self.LONLAT_EPSG, epsg)
 
     def query_bounding_box(self):
         """Get ways without bounding box, as well as nodes within said ways."""
@@ -367,6 +401,7 @@ class NVDBAPIQuery:
         self.parse_responses()
         self.create_dfs()
         self.transform(epsg=self.epsg)
+        self.bounding_box = BoundingBox(utm33_bounding_box, 32633, epsg)
 
     def initial_query(self):
         params = {
