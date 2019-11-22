@@ -196,20 +196,3 @@ class GPSSimulator:
         y = self.track.map(lambda x: x.y)
         df = pd.DataFrame({"x": x, "y": y})
         return TimelessGPSObservations(df, "x", "y", self.crs, self.crs)
-
-    @staticmethod
-    def bounding_box_to_polygon(bounding_box):
-        xmin, xmax, ymin, ymax = bounding_box
-        return Polygon([[xmin, ymin], [xmin, ymax], [xmax, ymax], [xmax, ymin]])
-
-    @staticmethod
-    def transform_geometry(geometry, in_crs, out_crs):
-        transformed = gpd.GeoSeries([geometry], crs=fiona.crs.from_epsg(in_crs)).to_crs(
-            out_crs
-        )
-        return transformed[0]
-
-    @staticmethod
-    def polygon_to_bounding_box(polygon):
-        bounding_box = polygon.bounds
-        return (bounding_box[0], bounding_box[2], bounding_box[1], bounding_box[3])

@@ -62,7 +62,7 @@ class UndirectedStateSpace(StateSpace):
         """See class documentation."""
         assert type(network) is UndirectedStreetNetwork
         self.street_network = network
-        self.states = network.edges_df.node_set.values.tolist()
+        self.states = list(set(map(lambda x: tuple(sorted(x)), network.graph.edges.keys())))
         self.shortest_paths = {
             source: target_dict
             for source, target_dict in all_pairs_dijkstra_path(
@@ -182,7 +182,7 @@ class DirectedStateSpace(StateSpace):
             for connection in map(frozenset, possible_previous_connections):
                 if connection != node_set:
                     states_set.add((node_set, connection))
-            self.states = list(states_set)
+        self.states = list(states_set)
 
     def exponential_decay_transition_probability(self, x, y):
         distance = self.compute_distance(x, y)

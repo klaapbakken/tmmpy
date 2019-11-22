@@ -10,6 +10,7 @@ from itertools import chain
 
 import matplotlib.pyplot as plt
 
+from shapely.geometry import Polygon
 from shapely.geometry import LineString
 from shapely.geometry import Point
 
@@ -21,14 +22,17 @@ from abc import ABC, abstractmethod
 
 
 class StreetNetwork(ABC):
-    def __init__(self, data):
+    def __init__(self, data, bounding_polygon=None):
         assert data.nodes_df.crs == data.ways_df.crs
         self.crs = data.nodes_df.crs
         self.nodes_df = data.nodes_df
         self.ways_df = data.ways_df
 
         self.create_edges_df()
-        self.create_graph()
+        if type(bounding_polygon) is Polygon:
+            self.create_restricted_graph(bounding_polygon)
+        else:
+            self.create_graph()
 
         self.trim_graph()
         self.trim_edges_df()
@@ -57,6 +61,10 @@ class StreetNetwork(ABC):
 
     @abstractmethod
     def trim_edges_df(self):
+        pass
+
+    @abstractmethod
+    def create_restricted_graph(self):
         pass
 
 
@@ -130,7 +138,9 @@ class UndirectedStreetNetwork(StreetNetwork):
         """Creates a graph, with each node being a node from the data source and each edge being an individual segment
         from the segment that makes out the ways."""
         graph = nx.Graph()
-        graph.add_nodes_from(self.nodes_df.osmid)
+        graph.add_nodes_from(
+            pd.Series(self.edges_df.u.tolist() + self.edges_df.v.tolist()).unique()
+        )
         graph.add_edges_from(
             [
                 (edge[0], edge[1], {"length": length, "line": line})
@@ -140,6 +150,23 @@ class UndirectedStreetNetwork(StreetNetwork):
             ]
         )
         self.graph = graph
+
+    def create_restricted_graph(self, bounding_polygon):
+        edges_df = self.edges_df
+        edges_df = edges_df.assign(u_contained=edges_df.u_point.map(lambda x: bounding_polygon.contains(x)))
+        edges_df = edges_df.assign(v_contained=edges_df.v_point.map(lambda x: bounding_polygon.contains(x)))
+        edges_df = edges_df.assign(both_contained=edges_df.u_contained & edges_df.v_contained)
+        restricted_edges_df = edges_df[edges_df.both_contained == True]
+
+        nodes = pd.concat((restricted_edges_df.u, restricted_edges_df.v))
+        points = pd.concat((restricted_edges_df.u_point, restricted_edges_df.v_point))
+        pd.DataFrame({"nodes" : nodes, "points" : points}).drop_duplicates("nodes")
+
+        g = nx.Graph()
+        g.add_nodes_from(((node, {"point" : point}) for node, point in zip(nodes, points)))
+        g.add_edges_from(((x["u"], x["v"], {"line" : x["linestring"], "length" : x["length"]}) for _, x in restricted_edges_df.iterrows()))
+        self.graph = g
+        self.edges_df = restricted_edges_df
 
     def trim_edges_df(self):
         """Remove rows in edges_df that are not part of the largest connected component."""
@@ -175,12 +202,14 @@ class DirectedStreetNetwork(StreetNetwork):
                 {"u": u, "v": v, "node_set": edges, "linestring": segment}
             )
             intermediate_dfs.append(df)
-        gdf = gpd.GeoDataFrame(
+        edges_df = gpd.GeoDataFrame(
             pd.concat(intermediate_dfs), geometry="linestring", crs=self.crs
         )
-        gdf["length"] = gdf.linestring.map(lambda x: x.length)
+        edges_df["length"] = edges_df.linestring.map(lambda x: x.length)
+        edges_df = edges_df.merge(self.nodes_df[["osmid", "point"]], left_on="u", right_on="osmid").drop("osmid", axis=1).rename({"point" : "u_point"}, axis=1)
+        edges_df = edges_df.merge(self.nodes_df[["osmid", "point"]], left_on="v", right_on="osmid").drop("osmid", axis=1).rename({"point" : "v_point"}, axis=1)
 
-        self.edges_df = gdf
+        self.edges_df = edges_df
 
     def create_graph(self):
         graph = nx.DiGraph()
@@ -211,6 +240,23 @@ class DirectedStreetNetwork(StreetNetwork):
         """Remove rows in edges_df that are not part of the largest connected component."""
         edges_in_graph = list(self.graph.edges.keys())
         self.edges_df = self.edges_df[self.edges_df.node_set.isin(edges_in_graph)]
+
+    def create_restricted_graph(self, bounding_polygon):
+        edges_df = self.edges_df
+        edges_df = edges_df.assign(u_contained=edges_df.u_point.map(lambda x: bounding_polygon.contains(x)))
+        edges_df = edges_df.assign(v_contained=edges_df.v_point.map(lambda x: bounding_polygon.contains(x)))
+        edges_df = edges_df.assign(both_contained=edges_df.u_contained & edges_df.v_contained)
+        restricted_edges_df = edges_df[edges_df.both_contained == True]
+
+        nodes = pd.concat((restricted_edges_df.u, restricted_edges_df.v))
+        points = pd.concat((restricted_edges_df.u_point, restricted_edges_df.v_point))
+        pd.DataFrame({"nodes" : nodes, "points" : points}).drop_duplicates("nodes")
+
+        g = nx.DiGraph()
+        g.add_nodes_from(((node, {"point" : point}) for node, point in zip(nodes, points)))
+        g.add_edges_from(((x["u"], x["v"], {"line" : x["linestring"], "length" : x["length"]}) for _, x in restricted_edges_df.iterrows()))
+        self.graph = g
+        self.edges_df = restricted_edges_df
 
     def distance_from_point_to_edge(self, point: Point, edge: tuple):
         """Find the distance from a point to the nearest point on the edge."""
