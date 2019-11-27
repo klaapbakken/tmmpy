@@ -38,7 +38,6 @@ class GPSSimulator:
         random.shuffle(starting_position)
         node_sequence = []
         previous_node = starting_position[0]
-        self.initial_node = previous_node
         current_node = starting_position[1]
         length = 0
         node_sequence.append(current_node)

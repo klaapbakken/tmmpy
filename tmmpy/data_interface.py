@@ -131,7 +131,7 @@ class PostGISQuery:
         ways_query = f"""
         SELECT *
         FROM {self.ways_table}
-        WHERE ST_Contains(
+        WHERE ST_Intersects(
             {self.ways_table}.linestring,
             ST_MakeEnvelope({self.xmin}, {self.ymin}, {self.xmax}, {self.ymax}, 4326)
             );

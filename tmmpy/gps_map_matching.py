@@ -12,6 +12,7 @@ class GPSMapMatcher:
     def __init__(self, state_space, transition_mode, emission_mode, **kwargs):
         self.SUPPORTED_EMISSION_MODES = frozenset(["projection", "gaussian"])
         self.SUPPORTED_TRANSITION_MODES = frozenset(["exponential", "exponential_constrained", "uniform"])
+        self.update_matrix = None
         self.state_space = state_space
 
         self.initial_probability = state_space.uniform_initial_probability
@@ -37,6 +38,7 @@ class GPSMapMatcher:
                 self.emission_probability,
                 self.initial_probability,
                 self.state_space.states,
+                update_matrix=self.update_matrix,
                 enable_warnings=True
             )
         elif self.emission_mode == "gaussian":
@@ -47,6 +49,7 @@ class GPSMapMatcher:
                 self.state_space.states,
                 self.mean,
                 self.covariance,
+                update_matrix=self.update_matrix,
                 enable_warnings=True
             )
 
@@ -118,6 +121,11 @@ class GPSMapMatcher:
             self.transition_probability = (
                 self.state_space.exponential_decay_constrained_transition_probability
             )
+            update_matrix = np.zeros((len(self.state_space), len(self.state_space))).astype(bool)
+            for row, rstate in enumerate(self.state_space.states):
+                for column, cstate in enumerate(self.state_space.states):
+                    update_matrix[row, column] = bool(self.state_space.legal_transitions[rstate][cstate])
+            self.frozen_mask = update_matrix
         self._transition_mode = value
         if hasattr(self, "_emission_probability") and hasattr(self, "_transition_probability"):
             self.create_hidden_markov_model()
