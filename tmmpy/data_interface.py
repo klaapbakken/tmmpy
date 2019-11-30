@@ -9,6 +9,7 @@ import networkx as nx
 from shapely import geometry
 from itertools import product
 from itertools import chain
+from itertools import zip_longest
 
 from shapely.geometry import LineString
 from shapely.geometry import Point
@@ -19,6 +20,9 @@ import requests
 
 from fiona.transform import transform
 from shapely.geometry import Polygon
+
+ALLOWED_HIGHWAY_KEYS = ["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "motorway_link", "trunk_link", "primary_link", "secondary_link", "tertiary_link", "living_street", "service"]
+DEFAULT_FILTER_DICTIONARY = {k : v for k, v in zip_longest([], ALLOWED_HIGHWAY_KEYS, fillvalue="highway")}
 
 class BoundingBox:
     def __init__(self, bounding_box, in_epsg, out_epsg):
@@ -74,7 +78,7 @@ class PostGISQuery:
         bounding_box: tuple,
         nodes_table: str = "nodes",
         ways_table: str = "ways",
-        filter_dictionary: dict = {},
+        filter_dictionary: dict = DEFAULT_FILTER_DICTIONARY,
     ):
         """See class documentation."""
         self.LONLAT_CRS = fiona.crs.from_epsg(4326)
@@ -218,7 +222,7 @@ class OverpassAPIQuery:
         bounding_box: tuple,
         nodes_table: str = "nodes",
         ways_table: str = "ways",
-        filter_dictionary: dict = {},
+        filter_dictionary: dict = DEFAULT_FILTER_DICTIONARY,
     ):
         """See class documentation."""
         self.LONLAT_CRS = fiona.crs.from_epsg(4326)
