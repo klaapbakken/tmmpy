@@ -117,6 +117,16 @@ class UndirectedStateSpace(StateSpace):
                 path.append(current)
         return path
 
+    def benchmark_estimate(self, observation):
+        estimate = []
+        points = observation.output_df.point
+        graph_edges = list(self.street_network.graph.edges.keys())
+        for point in points:
+            edges_as_tuple = map(lambda x: tuple(sorted(x)), graph_edges)
+            closest_edge = min(edges_as_tuple, key=lambda x: self.street_network.distance_from_point_to_edge(point, x))
+            estimate.append(closest_edge)
+        return estimate
+
     @property
     def gaussian_emission_parameters(self):
         midpoints = (
