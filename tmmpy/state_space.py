@@ -3,6 +3,7 @@ from street_network import UndirectedStreetNetwork, DirectedStreetNetwork
 import numpy as np
 from math import exp
 from math import pi
+from math import sqrt
 from itertools import product
 from functools import reduce
 from itertools import zip_longest
@@ -90,13 +91,11 @@ class UndirectedStateSpace(StateSpace):
     def exponential_decay_transition_probability(self, x, y):
         """Transition probability """
         distance = min((self.shortest_path_dictionary[a][b] for a, b in product(x, y)))
-        return exp(-self.gamma * distance)
+        return self.gamma*exp(-self.gamma * distance)
 
     def projection_emission_probability(self, z, x):
         distance = self.street_network.distance_from_point_to_edge(z, x)
-        return (2 * pi * self.sigma) ** (-1) * exp(
-            -distance ** 2 / (2 * self.sigma ** 2)
-        )
+        return sqrt(2)/(sqrt(pi)*self.sigma)*exp(-(distance ** 2)/(2 * self.sigma ** 2))
 
     def stitch_segments(self, segment_sequence):
         path = []
@@ -196,13 +195,11 @@ class DirectedStateSpace(StateSpace):
 
     def exponential_decay_transition_probability(self, x, y):
         distance = self.compute_distance(x, y)
-        return exp(-self.gamma * distance)
+        return self.gamma*exp(-self.gamma * distance)
 
     def projection_emission_probability(self, z, x):
         distance = self.street_network.distance_from_point_to_edge(z, x)
-        return (2 * pi * self.sigma) ** (-1) * exp(
-            -distance ** 2 / (2 * self.sigma ** 2)
-        )
+        return sqrt(2)/(sqrt(pi)*self.sigma)*exp(-(distance ** 2)/(2 * self.sigma ** 2))
 
     def exponential_decay_constrained_transition_probability(self, x, y):
         legal_transition = int(self.legal_transitions[x][y])
