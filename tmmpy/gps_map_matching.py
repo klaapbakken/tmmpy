@@ -22,11 +22,11 @@ class GPSMapMatcher:
         self.zs = []
 
     def attach_observations(self, observations, **kwargs):
-        self.observations = observations
         if type(self.hidden_markov_model) is HiddenMarkovModel:
-            self.z = observations.output_df.point.tolist()
+            self.z = observations.observation_sequence
         elif type(self.hidden_markov_model) is GaussianHiddenMarkovModel:
-            self.z = list(observations.output_df[["x", "y"]].to_numpy().tolist())
+            assert "missing" not in observations.output_df.columns
+            self.z = list(observations.observation_sequence[["x", "y"]].to_numpy().tolist())
         else:
             raise TypeError("Unexpected class in assigned to hidden_markov_model.")
 

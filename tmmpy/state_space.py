@@ -9,6 +9,8 @@ from functools import reduce
 from itertools import zip_longest
 from abc import ABC
 
+from shapely.geometry import Point
+
 from networkx.algorithms.shortest_paths.weighted import all_pairs_dijkstra_path_length
 from networkx import all_pairs_dijkstra_path
 
@@ -94,8 +96,13 @@ class UndirectedStateSpace(StateSpace):
         return self.gamma*exp(-self.gamma * distance)
 
     def projection_emission_probability(self, z, x):
-        distance = self.street_network.distance_from_point_to_edge(z, x)
-        return sqrt(2)/(sqrt(pi)*self.sigma)*exp(-(distance ** 2)/(2 * self.sigma ** 2))
+        if type(z) is not Point and z == "missing":
+            return 1
+        elif type(z) is Point:
+            distance = self.street_network.distance_from_point_to_edge(z, x)
+            return sqrt(2)/(sqrt(pi)*self.sigma)*exp(-(distance ** 2)/(2 * self.sigma ** 2))
+        else:
+            raise ValueError
 
     def stitch_segments(self, segment_sequence):
         path = []
@@ -198,8 +205,13 @@ class DirectedStateSpace(StateSpace):
         return self.gamma*exp(-self.gamma * distance)
 
     def projection_emission_probability(self, z, x):
-        distance = self.street_network.distance_from_point_to_edge(z, x)
-        return sqrt(2)/(sqrt(pi)*self.sigma)*exp(-(distance ** 2)/(2 * self.sigma ** 2))
+        if type(z) is not Point and z == "missing":
+            return 1
+        elif type(z) is Point:
+            distance = self.street_network.distance_from_point_to_edge(z, x)
+            return sqrt(2)/(sqrt(pi)*self.sigma)*exp(-(distance ** 2)/(2 * self.sigma ** 2))
+        else:
+            raise ValueError
 
     def exponential_decay_constrained_transition_probability(self, x, y):
         legal_transition = int(self.legal_transitions[x][y])

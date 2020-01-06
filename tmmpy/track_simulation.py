@@ -9,6 +9,8 @@ import numpy as np
 import geopandas as gpd
 import pandas as pd
 
+import json
+
 from observations import TimelessGPSObservations
 
 
@@ -30,6 +32,10 @@ class GPSSimulator:
             self.flow_dictionary[str(node)] = {
                 str(node): float(num) for node, num in zip(connected_nodes, rnum)
             }
+
+    def load_flow(self, flow_path):
+        with open(flow_path, mode="rb") as f:
+            self.flow_dictionary = json.load(f)
 
     def simulate_node_sequence(self, route_length):
         starting_position = list(
@@ -176,6 +182,12 @@ class GPSSimulator:
                 P[i, i] = ps[-1]
         return P
 
+    def get_gps_observation(self):
+        x = self.track.map(lambda x: x.x)
+        y = self.track.map(lambda x: x.y)
+        df = pd.DataFrame({"x": x, "y": y})
+        return TimelessGPSObservations(df, "x", "y", self.crs, self.crs)
+
     @property
     def edge_sequence(self):
         return [
@@ -188,10 +200,3 @@ class GPSSimulator:
         return self.street_network.edges_df[
             self.street_network.edges_df.node_set.isin(self.edge_sequence)
         ]
-
-    @property
-    def gps_observation(self):
-        x = self.track.map(lambda x: x.x)
-        y = self.track.map(lambda x: x.y)
-        df = pd.DataFrame({"x": x, "y": y})
-        return TimelessGPSObservations(df, "x", "y", self.crs, self.crs)
