@@ -1,1 +1,2 @@
 `tmmpy` (**T**oolkit for **M**ap **M**atching using **Py**thon) is a library implementing various methods that enables map matching.
+This project was created to support my work on my Master's thesis, which is available [here](https://ntnuopen.ntnu.no/ntnu-xmlui/handle/11250/2656712) or [here (direct download)](https://ntnuopen.ntnu.no/ntnu-xmlui/bitstream/handle/11250/2656712/no.ntnu%3ainspera%3a51965140%3a36941260.pdf?sequence=1&isAllowed=y).
